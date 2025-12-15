@@ -72,7 +72,7 @@ extension iCloudStorage where Value == Data? {
             let newValue = (store.object(forKey: key) as? Value) ?? defaultValue
             publisher.send(newValue)
         }
-        // store.synchronize() // <-- REMOVED (Will be triggered by ViewModel)
+        
     }
 }
 

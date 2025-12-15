@@ -41,79 +41,105 @@ class NotificationManager {
         // Respect user preference: if disabled, cancel and exit
         guard notificationsEnabled else {
             await cancelNotifications(for: subject)
-            print("Notifications disabled. Skipping scheduling for \(subject.name)")
             return
         }
-        
-        // First, cancel any old notifications for this subject
+
+        // Cancel existing to ensure clean slate
         await cancelNotifications(for: subject)
         
-        let subjectName = subject.name
-        
-        for schedule in (subject.schedules ?? []) {
+        guard let schedules = subject.schedules, !schedules.isEmpty else { return }
+
+        let subjectPrefix = subject.id.uuidString
+
+        for schedule in schedules {
+            guard let classTimes = schedule.classTimes else { continue }
             guard let weekday = dayToWeekday(schedule.day) else { continue }
-            
-            for classTime in (schedule.classTimes ?? []) {
+
+            for classTime in classTimes {
                 guard let startTime = classTime.startTime else { continue }
                 
-                let components = Calendar.current.dateComponents([.hour, .minute], from: startTime)
+                // Extract hour/minute from startTime
+                let calendar = Calendar.current
+                let components = calendar.dateComponents([.hour, .minute], from: startTime)
                 guard let hour = components.hour, let minute = components.minute else { continue }
                 
-                // 1. Create Content
-                let content = UNMutableNotificationContent()
-                content.title = "\(subjectName) class is starting now"
-                content.body = "Time to head to class!"
+                // 1. Notification at exact class time
+                var content = UNMutableNotificationContent()
+                content.title = "Class Started: \(subject.name)"
+                // Removed roomNo as it doesn't exist in the Schedule/ClassTime model
+                content.body = "Your class is scheduled now."
                 content.sound = .default
                 
-                // 2. Create Trigger
-                var dateComponents = DateComponents()
-                dateComponents.weekday = weekday // 1=Sun, 2=Mon, etc.
-                dateComponents.hour = hour
-                dateComponents.minute = minute
+                var triggerDate = DateComponents()
+                triggerDate.weekday = weekday
+                triggerDate.hour = hour
+                triggerDate.minute = minute
                 
-                let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
+                let trigger = UNCalendarNotificationTrigger(dateMatching: triggerDate, repeats: true)
                 
-                // 3. Create Request
-                let identifier = "\(subject.id.uuidString)_\(schedule.day)_\(classTime.id.uuidString)"
+                // Construct unique ID: SubjectUUID_ScheduleUUID_ClassTimeUUID_Exact
+                // Including ClassTime UUID is important if a subject has multiple times on the same day
+                let identifier = "\(subjectPrefix)_\(schedule.id.uuidString)_\(classTime.id.uuidString)_exact"
                 let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
                 
-                // 4. Add Request
                 do {
                     try await center.add(request)
-                    print("Scheduled notification: \(identifier)")
+                    // print("Scheduled exact notification: \(identifier)")
                     
-                    // Schedule a prior notification using user-selected lead time (weekly repeating)
-                    let lead = max(1, notificationLeadMinutes) // at least 1 minute
-
-                    let preContent = UNMutableNotificationContent()
-                    preContent.title = "\(subjectName) class in \(lead) minutes"
-                    preContent.body = "Get ready to head to class."
-                    preContent.sound = .default
-
-                    // Compute prior time components for the same weekday
-                    var preHour = hour
-                    var preMinute = minute - lead
-                    while preMinute < 0 {
-                        preMinute += 60
-                        preHour = (preHour - 1 + 24) % 24
-                    }
-
-                    var preDateComponents = DateComponents()
-                    preDateComponents.weekday = weekday
-                    preDateComponents.hour = preHour
-                    preDateComponents.minute = preMinute
-
-                    let preTrigger = UNCalendarNotificationTrigger(dateMatching: preDateComponents, repeats: true)
-                    let preIdentifier = "\(subject.id.uuidString)_\(schedule.day)_\(classTime.id.uuidString)_pre\(lead)"
-                    let preRequest = UNNotificationRequest(identifier: preIdentifier, content: preContent, trigger: preTrigger)
-
-                    do {
+                    // 2. Notification X minutes prior
+                    let priorMinutes = notificationLeadMinutes
+                    guard priorMinutes > 0 else { continue }
+                    
+                    // Calculate prior time
+                    // We need to handle potential hour wrapping (e.g. 10:05 - 10 mins = 09:55)
+                    // The easiest way is to construct a dummy Date, subtract, then extract components.
+                    // We use a known reference date's weekday/hour/minute to do the math.
+                    
+                    // Construct a date for "today" at that time, subtract, see result.
+                    // Note: This ignores the specific "weekday" logic for the subtraction math, but time-of-day math is constant.
+                    // e.g. 10:00 - 15min is always 09:45 regardless of day.
+                    
+                    let today = Date()
+                    if let baseDate = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: today),
+                       let priorDate = calendar.date(byAdding: .minute, value: -priorMinutes, to: baseDate) {
+                        
+                        let priorComponents = calendar.dateComponents([.hour, .minute], from: priorDate)
+                        
+                        var priorTriggerDate = DateComponents()
+                        priorTriggerDate.weekday = weekday // Same day (assuming lead time < 24 hrs and doesn't cross midnight heavily in a way that changes weekday for most classes)
+                        // Edge case: If class is Monday 00:05 and lead is 10 mins, it should be Sunday 23:55.
+                        // Handling the day-wrap correctly:
+                        if let exactDayDate = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: baseDate), // This is just a dummy
+                           let shiftedDate = calendar.date(byAdding: .minute, value: -priorMinutes, to: exactDayDate) {
+                             
+                            // Check if day changed (e.g. pushed back to previous day)
+                            if !calendar.isDate(exactDayDate, inSameDayAs: shiftedDate) {
+                                 // Weekday needs to shift back by 1
+                                 var prevDay = weekday - 1
+                                 if prevDay < 1 { prevDay = 7 }
+                                 priorTriggerDate.weekday = prevDay
+                            }
+                            
+                            let shiftedComps = calendar.dateComponents([.hour, .minute], from: shiftedDate)
+                            priorTriggerDate.hour = shiftedComps.hour
+                            priorTriggerDate.minute = shiftedComps.minute
+                        }
+                        
+                        var preContent = UNMutableNotificationContent()
+                        preContent.title = "Upcoming Class: \(subject.name)"
+                        // Removed roomNo
+                        preContent.body = "Starts in \(priorMinutes) minutes."
+                        preContent.sound = .default
+                        
+                        let preTrigger = UNCalendarNotificationTrigger(dateMatching: priorTriggerDate, repeats: true)
+                        let preIdentifier = "\(subjectPrefix)_\(schedule.id.uuidString)_\(classTime.id.uuidString)_pre"
+                        
+                        let preRequest = UNNotificationRequest(identifier: preIdentifier, content: preContent, trigger: preTrigger)
+                        
                         try await center.add(preRequest)
-                        print("Scheduled \(lead)-min prior notification: \(preIdentifier)")
-                    } catch {
-                        print("Failed to schedule \(lead)-min prior notification \(preIdentifier): \(error.localizedDescription)")
+                        // print("Scheduled prior notification: \(preIdentifier)")
                     }
-                    
+
                 } catch {
                     print("Failed to schedule notification \(identifier): \(error.localizedDescription)")
                 }
@@ -121,19 +147,23 @@ class NotificationManager {
         }
     }
 
-    /// Cancels all pending notifications for a specific subject.
+    /// Cancels all pending notifications for a specific subject object.
     func cancelNotifications(for subject: Subject) async {
-        let subjectPrefix = subject.id.uuidString
-        
+        await cancelNotifications(for: subject.id.uuidString)
+    }
+    
+    /// Cancels all pending notifications for a specific subject ID.
+    /// Useful when the subject object might be deleted or invalidated.
+    func cancelNotifications(for subjectID: String) async {
         let pendingRequests = await center.pendingNotificationRequests()
         
         let identifiersToCancel = pendingRequests
             .map { $0.identifier }
-            .filter { $0.hasPrefix(subjectPrefix) }
+            .filter { $0.hasPrefix(subjectID) }
         
         if !identifiersToCancel.isEmpty {
             center.removePendingNotificationRequests(withIdentifiers: identifiersToCancel)
-            print("Cancelled notifications for subject: \(subject.name)")
+            print("Cancelled \(identifiersToCancel.count) notifications for subject ID: \(subjectID)")
         }
     }
     
@@ -151,4 +181,3 @@ class NotificationManager {
         }
     }
 }
-

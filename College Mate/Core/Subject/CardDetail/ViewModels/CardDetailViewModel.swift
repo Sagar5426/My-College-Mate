@@ -570,6 +570,10 @@ class CardDetailViewModel: ObservableObject {
     }
     
     func deleteSubject(onDismiss: () -> Void) {
+        let subjectID = subject.id.uuidString
+        Task {
+            await NotificationManager.shared.cancelNotifications(for: subjectID)
+        }
         FileDataService.deleteSubjectFolder(for: subject)
         modelContext.delete(subject)
         onDismiss()
@@ -673,9 +677,9 @@ class CardDetailViewModel: ObservableObject {
         }
     }
     
-    func generateDocxThumbnail(from url: URL, completion: @escaping (UIImage?) -> Void) {
+    func generateDocxThumbnail(from url: URL, scale: CGFloat, completion: @escaping (UIImage?) -> Void) {
         let size = CGSize(width: 80, height: 100)
-        let scale = UIScreen.main.scale
+        // Use the passed scale instead of UIScreen.main.scale
         let request = QLThumbnailGenerator.Request(fileAt: url, size: size, scale: scale, representationTypes: .thumbnail)
         
         QLThumbnailGenerator.shared.generateBestRepresentation(for: request) { representation, error in
@@ -939,5 +943,3 @@ class CardDetailViewModel: ObservableObject {
         return fileIsCurrent
     }
 }
-
-

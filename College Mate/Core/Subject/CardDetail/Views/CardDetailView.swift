@@ -537,7 +537,10 @@ struct CardDetailView: View {
     private var noNotesView: some View {
         ScrollView {
             VStack {
-                Spacer(minLength: UIScreen.main.bounds.height / 6)
+                // FIXED: Replaced UIScreen.main.bounds.height / 6 with a fixed spacer height
+                // to avoid "main was deprecated in iOS 16.0" warning.
+                Spacer(minLength: 150)
+                
                 if viewModel.isSearching {
                     Text("No results found for \"\(viewModel.searchText)\"")
                         .font(.headline)
@@ -710,47 +713,8 @@ struct CardDetailView: View {
     @ViewBuilder
     private func listThumbnail(for fileMetadata: FileMetadata) -> some View {
         ZStack(alignment: .bottomTrailing) {
-            switch fileMetadata.fileType {
-            case .image:
-                if let fileURL = fileMetadata.getFileURL(),
-                   FileManager.default.fileExists(atPath: fileURL.path),
-                   let imageData = try? Data(contentsOf: fileURL),
-                   let image = UIImage(data: imageData) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFit()
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
-                } else {
-                    Image(systemName: "photo.fill")
-                        .font(.title)
-                        .foregroundColor(.green)
-                }
-            case .pdf:
-                Image(systemName: "doc.richtext.fill")
-                    .font(.title)
-                    .foregroundColor(.red)
-            case .docx:
-                Image(systemName: "doc.text.fill")
-                    .font(.title)
-                    .foregroundColor(.blue)
-            case .unknown:
-                Image(systemName: "doc.fill")
-                    .font(.title)
-                    .foregroundColor(.gray)
-            }
-            
-            // --- ADDED: Download icon for non-existent files ---
-            if let fileURL = fileMetadata.getFileURL(),
-               !FileManager.default.fileExists(atPath: fileURL.path) {
-                Image(systemName: "icloud.and.arrow.down.fill")
-                    .font(.caption)
-                    .foregroundColor(.blue)
-                    .padding(2)
-                    .background(.white)
-                    .clipShape(Circle())
-                    .shadow(radius: 1)
-                    .offset(x: 4, y: 4)
-            }
+            // Updated to use AsyncThumbnailView for list as well
+            AsyncThumbnailView(fileMetadata: fileMetadata, size: 44)
         }
     }
 
@@ -796,67 +760,8 @@ struct CardDetailView: View {
     private func fileMetadataView(for fileMetadata: FileMetadata) -> some View {
         VStack(spacing: 4) {
             ZStack(alignment: .bottom) {
-                // File icon/thumbnail based on type
-                switch fileMetadata.fileType {
-                case .image:
-                    if let fileURL = fileMetadata.getFileURL(),
-                       FileManager.default.fileExists(atPath: fileURL.path), // Check if it exists
-                       let imageData = try? Data(contentsOf: fileURL),
-                       let image = UIImage(data: imageData) {
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: tileSize, height: tileSize)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                    } else {
-                        Image(systemName: "photo.fill")
-                            .font(.largeTitle)
-                            .foregroundColor(.green)
-                            .frame(width: tileSize, height: tileSize)
-                            .background(Color.green.opacity(0.1))
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                    }
-                    
-                case .pdf:
-                    if let fileURL = fileMetadata.getFileURL(),
-                       FileManager.default.fileExists(atPath: fileURL.path), // Check if it exists
-                       let pdfThumbnail = viewModel.generatePDFThumbnail(from: fileURL) {
-                        Image(uiImage: pdfThumbnail)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: tileSize, height: tileSize)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                            .shadow(radius: 2)
-                    } else {
-                        Image(systemName: "doc.richtext.fill")
-                            .font(.largeTitle)
-                            .foregroundColor(.red)
-                            .frame(width: tileSize, height: tileSize)
-                            .background(Color.red.opacity(0.1))
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                    }
-                    
-                case .docx:
-                    if let fileURL = fileMetadata.getFileURL(),
-                       FileManager.default.fileExists(atPath: fileURL.path) { // Check if it exists
-                        DocxThumbnailView(fileURL: fileURL, viewModel: viewModel, size: tileSize)
-                    } else {
-                        Image(systemName: "doc.text.fill")
-                            .font(.largeTitle)
-                            .foregroundColor(.blue)
-                            .frame(width: tileSize, height: tileSize)
-                            .background(Color.blue.opacity(0.1))
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                    }
-                    
-                case .unknown:
-                    Image(systemName: "doc.fill")
-                        .font(.largeTitle)
-                        .foregroundColor(.gray)
-                        .frame(width: tileSize, height: tileSize)
-                        .background(Color.gray.opacity(0.1))
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                }
+                // REPLACED: Use AsyncThumbnailView for all file types to prevent blocking main thread
+                AsyncThumbnailView(fileMetadata: fileMetadata, size: tileSize)
                 
                 // Favorite indicator
                 if fileMetadata.isFavorite {
@@ -869,25 +774,10 @@ struct CardDetailView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                         .padding(4)
                 }
-                
-                // --- ADDED: Download icon for non-existent files ---
-                if let fileURL = fileMetadata.getFileURL(),
-                   !FileManager.default.fileExists(atPath: fileURL.path) {
-                    Image(systemName: "icloud.and.arrow.down.fill")
-                        .font(.callout)
-                        .foregroundColor(.blue)
-                        .padding(4)
-                        .background(.white)
-                        .clipShape(Circle())
-                        .shadow(radius: 2)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                        .padding(4)
-                }
             }
             .frame(width: tileSize, height: tileSize)
             
             // Show file name ONLY if it's not an image with a placeholder name.
-            // This collapses the view and removes the gap when there's no caption.
             if fileMetadata.fileType != .image || !isPlaceholderImageName(fileMetadata.fileName) {
                  Text((fileMetadata.fileName as NSString).deletingPathExtension)
                     .font(.caption)
@@ -1163,7 +1053,11 @@ struct CardDetailView: View {
     private var deleteAlertContent: some View {
         Button("Delete", role: .destructive) {
             playDeleteSound()
-            viewModel.deleteSubject { dismiss() }
+            // Updated to handle escaping closure with Task.detached or similar is not needed
+            // because deleteSubject handles the async work internally but accepts a closure.
+            viewModel.deleteSubject {
+                dismiss()
+            }
         }
     }
     
@@ -1301,6 +1195,7 @@ struct DocxThumbnailView: View {
     let fileURL: URL
     @ObservedObject var viewModel: CardDetailViewModel
     let size: CGFloat
+    @Environment(\.displayScale) var displayScale
     
     @State private var thumbnail: UIImage? = nil
     
@@ -1323,7 +1218,7 @@ struct DocxThumbnailView: View {
             }
         }
         .onAppear {
-            viewModel.generateDocxThumbnail(from: fileURL) { image in
+            viewModel.generateDocxThumbnail(from: fileURL, scale: displayScale) { image in
                 self.thumbnail = image
             }
         }
@@ -1574,73 +1469,3 @@ private func isPlaceholderImageName(_ fileName: String) -> Bool {
 
     return false
 }
-
-//#Preview("Card Detail Preview") {
-//
-//    struct PreviewWrapper: View {
-//        var body: some View {
-//            do {
-//                let config = ModelConfiguration(isStoredInMemoryOnly: true)
-//                let container = try ModelContainer(for: [
-//                    Subject.self,
-//                    Folder.self,
-//                    FileMetadata.self,
-//                    Attendance.self,
-//                    Schedule.self,
-//                    ClassTime.self,
-//                    Note.self,
-//                    AttendanceRecord.self
-//                ], configurations: config)
-//                let context = container.mainContext
-//
-//                let subject = Subject()
-//                subject.name = "Physics"
-//                subject.startDateOfSubject = Date()
-//                subject.schedules = []
-//                subject.attendance = Attendance(totalClasses: 0, attendedClasses: 0)
-//                subject.notes = []
-//                subject.rootFolders = []
-//                subject.fileMetadata = []
-//                subject.records = []
-//
-//                context.insert(subject)
-//
-//                let notesFolder = Folder(name: "Notes", parentFolder: nil, subject: subject)
-//                let refsFolder = Folder(name: "References", parentFolder: nil, subject: subject)
-//                context.insert(notesFolder)
-//                context.insert(refsFolder)
-//
-//                FileDataService.createSubjectFolder(for: subject)
-//
-//                func writeMockFile(named fileName: String, data: Data, folder: Folder?) {
-//                    _ = FileDataService.saveFile(
-//                        data: data,
-//                        fileName: fileName,
-//                        to: folder,
-//                        in: subject,
-//                        modelContext: context
-//                    )
-//                }
-//
-//                let tinyJPEG: Data = Data([0xFF, 0xD8, 0xFF, 0xDB, 0x00, 0x43, 0x00, 0xFF, 0xD9])
-//                let tinyPDF: Data = Data([0x25, 0x50, 0x44, 0x46, 0x2D, 0x31, 0x2E, 0x34, 0x0A])
-//                let tinyDOCX: Data = Data([0x50, 0x4B, 0x03, 0x04])
-//
-//                writeMockFile(named: "image_\(UUID().uuidString).jpg", data: tinyJPEG, folder: notesFolder)
-//                writeMockFile(named: "Syllabus.pdf", data: tinyPDF, folder: refsFolder)
-//                writeMockFile(named: "Assignment.docx", data: tinyDOCX, folder: nil)
-//
-//                return NavigationStack {
-//                    CardDetailView(subject: subject, modelContext: context)
-//                }
-//                .modelContainer(container)
-//
-//            } catch {
-//                return Text("Failed to create preview container: \(error.localizedDescription)")
-//            }
-//        }
-//    }
-//
-//    PreviewWrapper()
-//}
-
