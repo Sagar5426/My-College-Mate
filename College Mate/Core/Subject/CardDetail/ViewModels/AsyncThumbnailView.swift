@@ -6,6 +6,9 @@ struct AsyncThumbnailView: View {
     let fileMetadata: FileMetadata
     let size: CGFloat
     
+    // 1. ADD: Pass the ViewModel so we can access the cached generator
+    @ObservedObject var viewModel: CardDetailViewModel
+    
     @Environment(\.displayScale) private var displayScale
     @State private var thumbnail: UIImage? = nil
     @State private var isLoading = true
@@ -82,20 +85,30 @@ struct AsyncThumbnailView: View {
         }
         
         isDownloaded = true
-        let currentScale = displayScale
-        let targetSize = CGSize(width: size * 2, height: size * 2)
-        let fileType = fileMetadata.fileType // Extract value type (Enum)
         
-        // 3. Offload heavy lifting to background, passing only safe value types
-        let generatedImage = await Task.detached(priority: .userInitiated) {
-            return AsyncThumbnailView.generateImage(url: fileURL, type: fileType, targetSize: targetSize, scale: currentScale)
-        }.value
-        
-        // 4. Update UI on Main Actor
-        if let img = generatedImage {
-            self.thumbnail = img
+        // 3. UPDATED LOGIC: Use ViewModel for PDFs to leverage Caching
+        if fileMetadata.fileType == .pdf {
+            // Use the cached function in ViewModel
+            let image = await viewModel.generatePDFThumbnail(from: fileURL)
+            self.thumbnail = image
+            self.isLoading = false
+        } else {
+            // Existing logic for Images (Downsampling)
+            let currentScale = displayScale
+            let targetSize = CGSize(width: size * 2, height: size * 2)
+            let fileType = fileMetadata.fileType // Extract value type (Enum)
+            
+            // 4. Offload heavy lifting to background, passing only safe value types
+            let generatedImage = await Task.detached(priority: .userInitiated) {
+                return AsyncThumbnailView.generateImage(url: fileURL, type: fileType, targetSize: targetSize, scale: currentScale)
+            }.value
+            
+            // 5. Update UI on Main Actor
+            if let img = generatedImage {
+                self.thumbnail = img
+            }
+            self.isLoading = false
         }
-        self.isLoading = false
     }
     
     // Static helper explicitly marked nonisolated to allow background execution
@@ -103,6 +116,7 @@ struct AsyncThumbnailView: View {
         switch type {
         case .image:
             return downsample(imageAt: url, to: targetSize, scale: scale)
+        // PDF case is now handled by ViewModel via caching, but kept here for fallback/reference
         case .pdf:
             return generatePDFPage(url: url)
         default:

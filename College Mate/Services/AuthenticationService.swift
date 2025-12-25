@@ -1,22 +1,20 @@
 import Foundation
 import Combine
 
+// 1. Mark the entire class as @MainActor
+// This ensures ALL property updates happen on the main thread automatically.
+@MainActor
 class AuthenticationService: ObservableObject {
     
-    // A key to safely store and retrieve the login state from UserDefaults.
     private static let isLoggedInKey = "isLoggedIn"
     
-    // This property will now read its initial value from device storage.
     @Published var isLoggedIn: Bool {
         didSet {
-            // Whenever the value changes, save it to UserDefaults.
             UserDefaults.standard.set(isLoggedIn, forKey: Self.isLoggedInKey)
         }
     }
     
     init() {
-        // When the service is created, load the saved login state.
-        // If no value is found, it defaults to `false`.
         self.isLoggedIn = UserDefaults.standard.bool(forKey: Self.isLoggedInKey)
     }
     
@@ -28,4 +26,3 @@ class AuthenticationService: ObservableObject {
         isLoggedIn = false
     }
 }
-

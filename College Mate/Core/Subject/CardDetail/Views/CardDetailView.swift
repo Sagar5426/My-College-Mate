@@ -713,8 +713,8 @@ struct CardDetailView: View {
     @ViewBuilder
     private func listThumbnail(for fileMetadata: FileMetadata) -> some View {
         ZStack(alignment: .bottomTrailing) {
-            // Updated to use AsyncThumbnailView for list as well
-            AsyncThumbnailView(fileMetadata: fileMetadata, size: 44)
+            // Updated to use AsyncThumbnailView for list as well, PASSING VIEWMODEL
+            AsyncThumbnailView(fileMetadata: fileMetadata, size: 44, viewModel: viewModel)
         }
     }
 
@@ -760,8 +760,8 @@ struct CardDetailView: View {
     private func fileMetadataView(for fileMetadata: FileMetadata) -> some View {
         VStack(spacing: 4) {
             ZStack(alignment: .bottom) {
-                // REPLACED: Use AsyncThumbnailView for all file types to prevent blocking main thread
-                AsyncThumbnailView(fileMetadata: fileMetadata, size: tileSize)
+                // REPLACED: Use AsyncThumbnailView for all file types to prevent blocking main thread, PASSING VIEWMODEL
+                AsyncThumbnailView(fileMetadata: fileMetadata, size: tileSize, viewModel: viewModel)
                 
                 // Favorite indicator
                 if fileMetadata.isFavorite {

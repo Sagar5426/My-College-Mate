@@ -1,8 +1,23 @@
 import SwiftUI
 import SwiftData
 import PDFKit
-import QuickLook // Import for thumbnail generation
+import QuickLook
 import PhotosUI
+
+// MARK: - Thread-Safe Cache Wrapper
+// NSCache is thread-safe by design, but not marked Sendable in Swift 6 yet.
+// We use @unchecked Sendable to suppress the compiler error safely.
+final class ImageCache: @unchecked Sendable {
+    private let cache = NSCache<NSString, UIImage>()
+    
+    func object(forKey key: NSString) -> UIImage? {
+        cache.object(forKey: key)
+    }
+    
+    func setObject(_ obj: UIImage, forKey key: NSString) {
+        cache.setObject(obj, forKey: key)
+    }
+}
 
 // The @MainActor attribute ensures that all UI updates happen on the main thread.
 @MainActor
@@ -20,6 +35,11 @@ class CardDetailViewModel: ObservableObject {
     }
     
     // MARK: - Properties
+    
+    // MARK: - Caching
+    // FIX: Use the Sendable wrapper 'ImageCache'.
+    // 'nonisolated' allows this to be accessed safely from background threads.
+    nonisolated private let thumbnailCache = ImageCache()
     
     private let layoutStyleKey: String
     
@@ -60,7 +80,7 @@ class CardDetailViewModel: ObservableObject {
     }
     
     let subject: Subject
-    private let modelContext: ModelContext
+    let modelContext: ModelContext
     
     // --- View State ---
     @Published var layoutStyle: LayoutStyle = .grid {
@@ -109,6 +129,8 @@ class CardDetailViewModel: ObservableObject {
     @Published var isSearching: Bool = false
     @Published var searchResults: [FileMetadata] = []
     @Published var searchFolderResults: [Folder] = []
+    
+    private var searchTask: Task<Void, Never>?
     
     // --- Folder Management State ---
     @Published var isShowingCreateFolderAlert = false
@@ -486,25 +508,77 @@ class CardDetailViewModel: ObservableObject {
     }
     
     func performSearch() {
-        guard !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            searchResults.removeAll()
-            searchFolderResults.removeAll()
-            isSearching = false
-            filterFileMetadata()
-            return
+        searchTask?.cancel()
+        searchTask = Task {
+            // Debounce
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            
+            let query = searchText.lowercased()
+            guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                await MainActor.run {
+                    searchResults.removeAll()
+                    searchFolderResults.removeAll()
+                    isSearching = false
+                    filterFileMetadata()
+                }
+                return
+            }
+            
+            // FIX: "PersistentModels are not Sendable"
+            // We cannot pass 'subject' or '[FileMetadata]' (SwiftData classes) into a detached task directly.
+            // We must extract Sendable data (PersistentIdentifier + String) first.
+            
+            let allFiles = self.subject.fileMetadata ?? []
+            let rootFolders = self.subject.rootFolders ?? []
+            
+            // Helper struct for transfer (Sendable)
+            struct SearchItem: Sendable {
+                let id: PersistentIdentifier
+                let name: String
+            }
+            
+            // 1. Prepare data on MainActor
+            let filesData = allFiles.map { SearchItem(id: $0.persistentModelID, name: $0.fileName) }
+            
+            var allFoldersData: [SearchItem] = []
+            func collect(from folders: [Folder]) {
+                for f in folders {
+                    allFoldersData.append(SearchItem(id: f.persistentModelID, name: f.name))
+                    collect(from: f.subfolders ?? [])
+                }
+            }
+            collect(from: rootFolders)
+            
+            // 2. Run filter in background (Detached Task)
+            // Now we pass only 'filesData' and 'allFoldersData' which are [SearchItem] (Sendable)
+            let (filteredFileIDs, filteredFolderIDs) = await Task.detached(priority: .userInitiated) {
+                let fIDs = filesData.filter { $0.name.lowercased().contains(query) }.map { $0.id }
+                let fdIDs = allFoldersData.filter { $0.name.lowercased().contains(query) }.map { $0.id }
+                return (fIDs, fdIDs)
+            }.value
+            
+            // 3. Resolve back on MainActor
+            await MainActor.run {
+                // Re-fetch objects using IDs from the already loaded arrays
+                let filteredFiles = allFiles.filter { filteredFileIDs.contains($0.persistentModelID) }
+                
+                // For folders, we need to find them again recursively to match IDs
+                var allFoldersObjects: [Folder] = []
+                func collectObjects(from folders: [Folder]) {
+                    for f in folders {
+                        allFoldersObjects.append(f)
+                        collectObjects(from: f.subfolders ?? [])
+                    }
+                }
+                collectObjects(from: rootFolders)
+                let filteredFolders = allFoldersObjects.filter { filteredFolderIDs.contains($0.persistentModelID) }
+                
+                self.isSearching = true
+                self.searchResults = self.sortFiles(filteredFiles)
+                self.searchFolderResults = self.sortFolders(filteredFolders)
+                self.filterFileMetadata()
+            }
         }
-        
-        isSearching = true
-        let query = searchText.lowercased()
-        
-        let filesToSearch = self.subject.fileMetadata ?? []
-        let results = filesToSearch.filter { $0.fileName.lowercased().contains(query) }
-        searchResults = sortFiles(results)
-
-        let allFolders = allFoldersRecursively(from: subject.rootFolders ?? [])
-        searchFolderResults = sortFolders(allFolders.filter { $0.name.lowercased().contains(query) })
-        
-        filterFileMetadata()
     }
     
     func clearSearch() {
@@ -595,42 +669,134 @@ class CardDetailViewModel: ObservableObject {
     // MARK: - File Import Handlers
 
     func handleFileImport(result: Result<[URL], Error>) {
+        // 1. Update UI state immediately (on MainActor)
         isImportingFile = true
-        Task {
-            defer { Task { @MainActor in isImportingFile = false } }
+        
+        // 2. Pre-calculate Destination Path (on MainActor)
+        let destinationDir: URL
+        if let currentFolder = currentFolder {
+            destinationDir = FileDataService.getFolderURL(for: currentFolder, in: subject)
+        } else {
+            destinationDir = FileDataService.subjectFolder(for: subject)
+        }
+        
+        // 3. Launch Detached Task
+        Task.detached(priority: .userInitiated) { [weak self] in
             do {
                 let sourceURLs = try result.get()
-                for sourceURL in sourceURLs {
-                    _ = sourceURL.startAccessingSecurityScopedResource()
-                    let data = try await Task.detached {
-                        defer { sourceURL.stopAccessingSecurityScopedResource() }
-                        return try Data(contentsOf: sourceURL)
-                    }.value
-                    _ = FileDataService.saveFile(data: data, fileName: sourceURL.lastPathComponent, to: self.currentFolder, in: self.subject, modelContext: self.modelContext)
+                
+                // 4. Background Work: Process Files
+                let importedFiles = await withTaskGroup(of: (String, Int64)?.self) { group in
+                    for sourceURL in sourceURLs {
+                        group.addTask {
+                            guard sourceURL.startAccessingSecurityScopedResource() else { return nil }
+                            defer { sourceURL.stopAccessingSecurityScopedResource() }
+                            
+                            do {
+                                // Create directory safely
+                                try FileManager.default.createDirectory(at: destinationDir, withIntermediateDirectories: true)
+                                
+                                let fileName = sourceURL.lastPathComponent
+                                let destinationURL = destinationDir.appendingPathComponent(fileName)
+                                
+                                if FileManager.default.fileExists(atPath: destinationURL.path) {
+                                    try FileManager.default.removeItem(at: destinationURL)
+                                }
+                                
+                                try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
+                                let size = (try? destinationURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+                                return (fileName, Int64(size))
+                            } catch {
+                                print("Error importing file: \(error)")
+                                return nil
+                            }
+                        }
+                    }
+                    
+                    var results: [(String, Int64)] = []
+                    for await result in group {
+                        if let res = result { results.append(res) }
+                    }
+                    return results
                 }
-                loadFolderContent()
+                
+                // 5. Switch back to MainActor to update State
+                await MainActor.run { [weak self] in
+                    guard let self = self else { return }
+                    
+                    for (fileName, fileSize) in importedFiles {
+                        let fileExtension = (fileName as NSString).pathExtension
+                        let fileType = FileType.from(fileExtension: fileExtension)
+                        
+                        let relativePath: String
+                        if let folder = self.currentFolder {
+                            relativePath = "\(folder.fullPath)/\(fileName)"
+                        } else {
+                            relativePath = fileName
+                        }
+                        
+                        let metadata = FileMetadata(
+                            fileName: fileName,
+                            fileType: fileType,
+                            relativePath: relativePath,
+                            fileSize: fileSize,
+                            folder: self.currentFolder,
+                            subject: self.subject
+                        )
+                        self.modelContext.insert(metadata)
+                    }
+                    
+                    self.isImportingFile = false
+                    self.loadFolderContent()
+                }
+                
             } catch {
-                print("Failed to import files: \(error.localizedDescription)")
+                await MainActor.run { [weak self] in
+                    print("Failed to import files: \(error.localizedDescription)")
+                    self?.isImportingFile = false
+                }
             }
         }
     }
     
     private func handlePhotoPickerSelection() {
+        // 1. Fast fail check
         guard !selectedPhotoItems.isEmpty else { return }
-        isImportingFile = true
-        let items = selectedPhotoItems
-        self.selectedPhotoItems = [] // Clear selection immediately
         
-        Task {
-            defer { Task { @MainActor in
-                isImportingFile = false
-                if self.isEditing { self.toggleEditMode() } // Exit edit mode after adding
-                self.loadFolderContent()
-            }}
+        // 2. Update UI State immediately on Main Thread
+        let items = selectedPhotoItems
+        self.selectedPhotoItems = []
+        self.isImportingFile = true
+        
+        // 3. Run heavy lifting in a Detached Task (Background Thread)
+        Task.detached(priority: .userInitiated) { [weak self] in
             
-            for item in items {
-                if let data = try? await item.loadTransferable(type: Data.self) {
-                    let fileName = "image_\(UUID().uuidString).jpg"
+            // Use a TaskGroup to process images in PARALLEL
+            let readyFiles: [(Data, String)] = await withTaskGroup(of: (Data, String)?.self) { group in
+                for item in items {
+                    group.addTask {
+                        if let data = try? await item.loadTransferable(type: Data.self) {
+                            let fileName = "image_\(UUID().uuidString).jpg"
+                            return (data, fileName)
+                        }
+                        return nil
+                    }
+                }
+                
+                var results: [(Data, String)] = []
+                for await result in group {
+                    if let validResult = result {
+                        results.append(validResult)
+                    }
+                }
+                return results
+            }
+            
+            // 4. Switch back to MainActor for Database & UI Updates
+            await MainActor.run { [weak self] in
+                guard let self = self else { return }
+                
+                for (data, fileName) in readyFiles {
                     _ = FileDataService.saveFile(
                         data: data,
                         fileName: fileName,
@@ -639,6 +805,10 @@ class CardDetailViewModel: ObservableObject {
                         modelContext: self.modelContext
                     )
                 }
+                
+                self.isImportingFile = false
+                if self.isEditing { self.toggleEditMode() }
+                self.loadFolderContent()
             }
         }
     }
@@ -652,29 +822,101 @@ class CardDetailViewModel: ObservableObject {
     }
     
     func handleCroppedImage(_ image: UIImage?) {
-        guard let image = image, let imageData = image.jpegData(compressionQuality: 0.8) else { return }
-        let fileName = "image_\(UUID().uuidString).jpg"
+        guard let image = image else { return }
         
-        if let _ = FileDataService.saveFile(data: imageData, fileName: fileName, to: currentFolder, in: subject, modelContext: modelContext) {
-            if self.isEditing { self.toggleEditMode() }
-            loadFolderContent()
+        // 1. Resolve Path on MainActor
+        let destinationDir: URL
+        if let currentFolder = currentFolder {
+            destinationDir = FileDataService.getFolderURL(for: currentFolder, in: subject)
+        } else {
+            destinationDir = FileDataService.subjectFolder(for: subject)
+        }
+        
+        // 2. Launch Detached Task
+        Task.detached(priority: .userInitiated) { [weak self] in
+            // 3. Background Work: Compression & Disk I/O
+            // Do NOT use 'self' here.
+            guard let imageData = image.jpegData(compressionQuality: 0.8) else { return }
+            let fileName = "image_\(UUID().uuidString).jpg"
+            let fileURL = destinationDir.appendingPathComponent(fileName)
+            
+            do {
+                try FileManager.default.createDirectory(at: destinationDir, withIntermediateDirectories: true)
+                try imageData.write(to: fileURL)
+            } catch {
+                print("Failed to save cropped image: \(error)")
+                return
+            }
+            
+            // 4. Switch to MainActor for DB Update
+            await MainActor.run { [weak self] in
+                guard let self = self else { return }
+                
+                let relativePath: String
+                if let folder = self.currentFolder {
+                    relativePath = "\(folder.fullPath)/\(fileName)"
+                } else {
+                    relativePath = fileName
+                }
+                
+                let metadata = FileMetadata(
+                    fileName: fileName,
+                    fileType: .image,
+                    relativePath: relativePath,
+                    fileSize: Int64(imageData.count),
+                    folder: self.currentFolder,
+                    subject: self.subject
+                )
+                self.modelContext.insert(metadata)
+                
+                if self.isEditing { self.toggleEditMode() }
+                self.loadFolderContent()
+            }
         }
     }
 
     // MARK: - Thumbnail Generation
     
-    func generatePDFThumbnail(from url: URL) -> UIImage? {
-        guard let document = PDFDocument(url: url), let page = document.page(at: 0) else { return nil }
-        let pageRect = page.bounds(for: .mediaBox)
-        let renderer = UIGraphicsImageRenderer(size: pageRect.size)
-        return renderer.image { ctx in
-            UIColor.white.set()
-            ctx.fill(pageRect)
-            let cgContext = ctx.cgContext
-            cgContext.translateBy(x: 0.0, y: pageRect.size.height)
-            cgContext.scaleBy(x: 1.0, y: -1.0)
-            page.draw(with: .mediaBox, to: cgContext)
+    // FIX: 'nonisolated' allows this func to be called from anywhere.
+    // We use the nonisolated cache, so this is safe.
+    nonisolated func generatePDFThumbnail(from url: URL) async -> UIImage? {
+        let cacheKey = url.absoluteString as NSString
+
+        // 1. Check Cache (Safe because thumbnailCache is nonisolated/thread-safe)
+        if let cachedImage = thumbnailCache.object(forKey: cacheKey) {
+            return cachedImage
         }
+
+        // 2. Generate in Background (Off Main Thread)
+        // Since this function is already nonisolated, we don't *strictly* need Task.detached
+        // to exit the main actor, but it's good for clarity that we are running potentially heavy
+        // work in the background. However, capturing 'thumbnailCache' in a detached task
+        // requires it to be sendable or nonisolated. Since we made it nonisolated, this works.
+        return await Task.detached(priority: .userInitiated) { [thumbnailCache] in
+            // Create the document. This can be slow for large PDFs.
+            guard let document = PDFDocument(url: url),
+                  let page = document.page(at: 0) else {
+                return nil
+            }
+
+            // Calculate size and render
+            let pageRect = page.bounds(for: .mediaBox)
+            let renderer = UIGraphicsImageRenderer(size: pageRect.size)
+
+            let thumbnail = renderer.image { ctx in
+                UIColor.white.set()
+                ctx.fill(pageRect)
+                let cgContext = ctx.cgContext
+                cgContext.translateBy(x: 0.0, y: pageRect.size.height)
+                cgContext.scaleBy(x: 1.0, y: -1.0)
+                page.draw(with: .mediaBox, to: cgContext)
+            }
+
+            // 3. Cache the result
+            thumbnailCache.setObject(thumbnail, forKey: cacheKey)
+
+            return thumbnail
+        }.value
     }
     
     func generateDocxThumbnail(from url: URL, scale: CGFloat, completion: @escaping (UIImage?) -> Void) {

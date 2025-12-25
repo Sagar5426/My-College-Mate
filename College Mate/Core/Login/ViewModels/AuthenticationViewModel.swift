@@ -1,45 +1,67 @@
-import Foundation
-import AuthenticationServices
-import Combine
+import SwiftUI
+import LocalAuthentication
 
-class AuthenticationViewModel: NSObject, ObservableObject, ASAuthorizationControllerDelegate {
+// MARK: - Fix: Add @MainActor to ensure all published updates happen on the main thread
+@MainActor
+class AuthenticationViewModel: ObservableObject {
     
+    @Published var isUnlocked = false
+    @Published var hasBiometrics = false
+    @Published var showError = false
+    @Published var errorMessage = ""
+    
+    // Add the missing callback property
     var onLoginSuccess: (() -> Void)?
-    var onLoginFailure: ((Error) -> Void)?
-
-    func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
-        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let window = windowScene.windows.first else {
-            return UIWindow()
-        }
-        return window
+    
+    init() {
+        checkBiometricAvailability()
     }
     
-    func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
-        if let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential {
-            
-            let userID = appleIDCredential.user
-            if let fullName = appleIDCredential.fullName {
-                print("User's name: \(fullName.givenName ?? "") \(fullName.familyName ?? "")")
-            }
-
-            if let email = appleIDCredential.email {
-                print("User's email: \(email)")
-            }
-            
-            print("Successfully signed in with Apple. User ID: \(userID)")
-            
-            DispatchQueue.main.async {
-                self.onLoginSuccess?()
+    func checkBiometricAvailability() {
+        let context = LAContext()
+        var error: NSError?
+        
+        if context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) {
+            hasBiometrics = true
+        } else {
+            hasBiometrics = false
+            if let error = error {
+                print("Biometrics unavailable: \(error.localizedDescription)")
             }
         }
     }
     
-    func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
-        print("Sign in with Apple failed with error: \(error.localizedDescription)")
-        DispatchQueue.main.async {
-            self.onLoginFailure?(error)
+    func authenticate() {
+        let context = LAContext()
+        var error: NSError?
+        
+        // Check for biometrics again before attempting
+        if context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) {
+            let reason = "Unlock My College Mate"
+            
+            context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: reason) { [weak self] success, authenticationError in
+                
+                // IMPORTANT: Dispatch back to main thread
+                Task { @MainActor in
+                    if success {
+                        self?.isUnlocked = true
+                        // Call the success closure if it exists
+                        self?.onLoginSuccess?()
+                    } else {
+                        self?.showError = true
+                        self?.errorMessage = authenticationError?.localizedDescription ?? "Authentication failed"
+                    }
+                }
+            }
+        } else {
+            self.showError = true
+            self.errorMessage = "Biometrics not available"
         }
+    }
+    
+    // Simple bypass for testing (optional)
+    func unlockForTesting() {
+        isUnlocked = true
+        onLoginSuccess?()
     }
 }
-
