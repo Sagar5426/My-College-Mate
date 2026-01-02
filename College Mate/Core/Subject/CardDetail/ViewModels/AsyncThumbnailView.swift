@@ -6,7 +6,7 @@ struct AsyncThumbnailView: View {
     let fileMetadata: FileMetadata
     let size: CGFloat
     
-    // 1. ADD: Pass the ViewModel so we can access the cached generator
+    // 1. Pass the ViewModel so we can access the cached generator
     @ObservedObject var viewModel: CardDetailViewModel
     
     @Environment(\.displayScale) private var displayScale
@@ -86,12 +86,23 @@ struct AsyncThumbnailView: View {
         
         isDownloaded = true
         
-        // 3. UPDATED LOGIC: Use ViewModel for PDFs to leverage Caching
+        // 3. UPDATED LOGIC: Handle PDF and DOCX using ViewModel helpers
         if fileMetadata.fileType == .pdf {
             // Use the cached function in ViewModel
             let image = await viewModel.generatePDFThumbnail(from: fileURL)
             self.thumbnail = image
             self.isLoading = false
+            
+        } else if fileMetadata.fileType == .docx {
+            // Use the ViewModel's completion-handler based function wrapped in a continuation
+            let image: UIImage? = await withCheckedContinuation { continuation in
+                viewModel.generateDocxThumbnail(from: fileURL, scale: displayScale) { thumbnail in
+                    continuation.resume(returning: thumbnail)
+                }
+            }
+            self.thumbnail = image
+            self.isLoading = false
+            
         } else {
             // Existing logic for Images (Downsampling)
             let currentScale = displayScale

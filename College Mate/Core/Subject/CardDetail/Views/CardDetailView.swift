@@ -1156,6 +1156,7 @@ struct PreviewWithShareView: View {
                                 isShowingShareSheet = true
                             }) {
                                 Image(systemName: "square.and.arrow.up")
+                                    .foregroundStyle(.white)
                             }
                         }
                         ToolbarItem(placement: .bottomBar) {
@@ -1167,12 +1168,16 @@ struct PreviewWithShareView: View {
                     playHaptic(style: .light)
                     onDismiss()
                 }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.largeTitle)
-                        .symbolRenderingMode(.palette)
-                        .foregroundStyle(.black, Color(.systemGray5).opacity(0.8))
+                    Image(systemName: "xmark")
+                        .foregroundStyle(.white)
+                        .bold()
+                        .padding(12)
+                        .background {
+                            Circle()
+                                .glassEffect()
+                        }
                 }
-                .padding()
+                .buttonStyle(.plain)
             }
         }
         // This modifier prevents the sheet from being dismissed by swiping down
@@ -1277,31 +1282,24 @@ struct SelectionOverlay: ViewModifier {
     let isEditing: Bool
 
     func body(content: Content) -> some View {
-        ZStack {
-            content
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 3)
-                )
-            if isEditing {
-                Rectangle()
-                    .fill(Color.black.opacity(isSelected ? 0.2 : 0))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .allowsHitTesting(false)
-                
-                if isSelected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.title2)
-                        .symbolRenderingMode(.palette)
-                        .foregroundStyle(.white, .blue)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                        .padding(4)
-                        .allowsHitTesting(false)
+        content
+            .overlay(alignment: .center) {
+                if isEditing {
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 32, height: 32)
+                        .foregroundStyle(isSelected ? Color.blue : Color.gray)
+                        .background(
+                            Circle()
+                                .fill(Color.white)
+                                .padding(1)
+                        )
+                        .transition(.opacity)
                 }
             }
-        }
-        .animation(.easeInOut(duration: 0.2), value: isSelected)
-        .animation(.easeInOut(duration: 0.2), value: isEditing)
+            .animation(.easeInOut(duration: 0.2), value: isSelected)
+            .animation(.easeInOut(duration: 0.2), value: isEditing)
     }
 }
 
