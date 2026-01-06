@@ -29,19 +29,27 @@ struct NoNotesView: View {
 }
 
 #Preview {
-    ZStack {
-                // Background (optional)
-                Color.clear // Replace with your desired background color if needed
-                
-                ScrollView {
-                    VStack {
-                        Spacer(minLength: UIScreen.main.bounds.height / 4) // Adjust for vertical centering
-                        NoNotesView(imageName: "doc.text.magnifyingglass", title: "No Notes Added", message: "Click on the add button to start adding notes.")
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        Spacer(minLength: UIScreen.main.bounds.height / 4) // Adjust for vertical centering
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    // 1. Wrap in GeometryReader to access the available size (proxy)
+    GeometryReader { proxy in
+        ZStack {
+            Color.clear
+            
+            ScrollView {
+                VStack {
+                    // 2. Use proxy.size.height instead of UIScreen.main.bounds.height
+                    Spacer(minLength: proxy.size.height / 4)
+                    
+                    NoNotesView(imageName: "doc.text.magnifyingglass",
+                              title: "No Notes Added",
+                              message: "Click on the add button to start adding notes.")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    
+                    // 3. Use proxy.size.height here as well
+                    Spacer(minLength: proxy.size.height / 4)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .ignoresSafeArea()
+        }
+        .ignoresSafeArea()
+    }
 }

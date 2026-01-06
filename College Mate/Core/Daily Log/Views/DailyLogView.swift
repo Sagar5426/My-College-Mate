@@ -7,16 +7,56 @@ struct DailyLogView: View {
     @Query var subjects: [Subject]
     
     @StateObject private var viewModel = DailyLogViewModel()
+    
+    // MARK: - Animation State
     @State private var viewID = UUID()
+    @State private var slideDirection: SlideDirection = .forward
+    
+    enum SlideDirection {
+        case forward   // Future
+        case backward  // Past
+    }
+    
+    // Custom asymmetric transition
+    var customSlideTransition: AnyTransition {
+        switch slideDirection {
+        case .forward:
+            return .asymmetric(
+                insertion: .move(edge: .trailing),
+                removal: .move(edge: .leading)
+            )
+        case .backward:
+            return .asymmetric(
+                insertion: .move(edge: .leading),
+                removal: .move(edge: .trailing)
+            )
+        }
+    }
+    
+    // Using a slightly more damped spring for stability
+    var springAnimation: Animation {
+        .spring(response: 0.5, dampingFraction: 0.8)
+    }
     
     var body: some View {
         NavigationStack {
             ScrollView(.vertical) {
                 LazyVStack(spacing: 16, pinnedViews: [.sectionHeaders]) {
                     Section {
-                        ControlPanelView(viewModel: viewModel)
+                        ControlPanelView(
+                            viewModel: viewModel,
+                            viewID: viewID,
+                            transition: customSlideTransition,
+                            onPrevious: animateToPreviousDay,
+                            onNext: animateToNextDay
+                        )
+                        
                         Divider().padding(.vertical)
+                        
                         ClassesList(viewModel: viewModel)
+                            .id(viewID)
+                            .transition(customSlideTransition)
+                        
                     } header: {
                         GeometryReader { proxy in
                             HeaderView(size: proxy.size, title: "Attendance 🙋", isShowingProfileView: $viewModel.isShowingProfileView)
@@ -26,7 +66,6 @@ struct DailyLogView: View {
                 }
                 .padding()
             }
-            .id(viewID)
             .background(LinearGradient.appBackground.ignoresSafeArea())
             .blur(radius: viewModel.isShowingDatePicker ? 8 : 0)
             .disabled(viewModel.isShowingDatePicker)
@@ -38,25 +77,18 @@ struct DailyLogView: View {
                     DateFilterView(
                         start: viewModel.selectedDate,
                         onSubmit: { start in
-                            viewModel.selectedDate = start
+                            animateDateJump(to: start)
                             viewModel.isShowingDatePicker = false
-                            viewID = UUID()
                         },
                         onClose: {
                             viewModel.isShowingDatePicker = false
-                            viewID = UUID()
                         }
                     )
                     .transition(.move(edge: .leading))
                 }
             }
-            .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextObjectsDidChange)) { notification in
-                if !Thread.isMainThread {
-                    DispatchQueue.main.async {
-                        viewID = UUID()
-                    }
-                }
-            }
+            // Handle CoreData notifications if needed
+            .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextObjectsDidChange)) { _ in }
         }
         .animation(.spring(duration: 0.4), value: viewModel.isShowingDatePicker)
         .onAppear {
@@ -66,62 +98,115 @@ struct DailyLogView: View {
             viewModel.setup(subjects: subjects, modelContext: modelContext)
         }
     }
+    
+    // MARK: - Animation Handlers
+    
+    func animateToPreviousDay() {
+        slideDirection = .backward
+        withAnimation(springAnimation) {
+            viewModel.moveToPreviousDay()
+            viewID = UUID()
+        }
+    }
+    
+    func animateToNextDay() {
+        slideDirection = .forward
+        withAnimation(springAnimation) {
+            viewModel.moveToNextDay()
+            viewID = UUID()
+        }
+    }
+    
+    func animateDateJump(to newDate: Date) {
+        if newDate > viewModel.selectedDate {
+            slideDirection = .forward
+        } else {
+            slideDirection = .backward
+        }
+        
+        withAnimation(springAnimation) {
+            viewModel.selectedDate = newDate
+            viewID = UUID()
+        }
+    }
 }
 
 // MARK: - Control Panel View
 struct ControlPanelView: View {
     @ObservedObject var viewModel: DailyLogViewModel
     
+    let viewID: UUID
+    let transition: AnyTransition
+    
+    var onPrevious: () -> Void
+    var onNext: () -> Void
+    
     private var isNextDayDisabled: Bool { Calendar.current.isDateInToday(viewModel.selectedDate) }
     
     var body: some View {
         VStack(spacing: 16) {
-            HStack {
+            HStack(spacing: 0) { // spacing 0 ensures strict control over layout
+                
+                // LEFT CHEVRON (Static)
                 Button(action: {
                     let generator = UIImpactFeedbackGenerator(style: .medium)
                     generator.impactOccurred()
-                    viewModel.moveToPreviousDay()
+                    onPrevious()
                 }) {
                     Image(systemName: "chevron.left.circle.fill")
+                        .font(.title)
+                        .padding(.trailing, 8)
                 }
                 
-                Spacer()
-                
-                Button(action: {
-                    let generator = UIImpactFeedbackGenerator(style: .medium)
-                    generator.impactOccurred()
-                    withAnimation(.snappy) {
-                        viewModel.isShowingDatePicker.toggle()
+                // DATE LABEL CONTAINER
+                // ZStack ensures incoming/outgoing text occupy the exact same center point
+                ZStack {
+                    Button(action: {
+                        let generator = UIImpactFeedbackGenerator(style: .medium)
+                        generator.impactOccurred()
+                        withAnimation(.snappy) {
+                            viewModel.isShowingDatePicker.toggle()
+                        }
+                    }) {
+                        Text(viewModel.selectedDate.formatted(.dateTime.day().month(.wide).year().weekday(.wide)))
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                            // ID and Transition applied strictly to the Text content
+                            .id(viewID)
+                            .transition(transition)
+                            .frame(maxWidth: .infinity) // Text takes full width of the ZStack
                     }
-                }) {
-                    Text(viewModel.selectedDate.formatted(.dateTime.day().month(.wide).year().weekday(.wide)))
-                        .font(.headline)
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
+                .frame(height: 30) // Fixed height to prevent vertical jitter
+                .frame(maxWidth: .infinity) // Fills space between chevrons
+                .compositingGroup() // <--- KEY FIX: Flattens view for accurate clipping
+                .clipped()          // <--- KEY FIX: Clips outgoing text at exactly this edge
                 
-                Spacer()
-                
+                // RIGHT CHEVRON (Static)
                 Button(action: {
                     let generator = UIImpactFeedbackGenerator(style: .medium)
                     generator.impactOccurred()
-                    viewModel.moveToNextDay()
+                    onNext()
                 }) {
                     Image(systemName: "chevron.right.circle.fill")
+                        .font(.title)
+                        .padding(.leading, 8)
                 }
                 .disabled(isNextDayDisabled)
                 .opacity(isNextDayDisabled ? 0.5 : 1.0)
             }
-            .font(.title)
             .foregroundStyle(.blue)
             
             if !viewModel.dailyClasses.isEmpty {
                 Button(action: {
                     let generator = UIImpactFeedbackGenerator(style: .medium)
                     generator.impactOccurred()
-                    viewModel.toggleHoliday()
+                    withAnimation {
+                        viewModel.toggleHoliday()
+                    }
                 }) {
                     Text(viewModel.isHoliday ? "Marked as Holiday" : "Mark Today as Holiday")
                         .fontWeight(.semibold)
@@ -148,35 +233,46 @@ struct ClassesList: View {
     @ObservedObject var viewModel: DailyLogViewModel
     
     var body: some View {
-        if viewModel.isHoliday {
-            VStack(spacing: 10) {
-                Image(systemName: "sun.max.fill")
-                    .font(.largeTitle)
-                    .foregroundStyle(.orange)
-                Text("Enjoy your holiday!")
+        // ZStack ensures the layout container exists before/after transition
+        // preventing the "double view" glitch where they fight for layout space.
+        ZStack(alignment: .top) {
+            if viewModel.isHoliday {
+                VStack(spacing: 10) {
+                    Image(systemName: "sun.max.fill")
+                        .font(.largeTitle)
+                        .foregroundStyle(.orange)
+                    Text("Enjoy your holiday!")
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 50)
+                
+            } else if viewModel.dailyClasses.isEmpty {
+                Text("No classes scheduled for this day.")
                     .font(.subheadline)
                     .foregroundColor(.gray)
-            }
-            .padding(.vertical, 50)
-            
-        } else if viewModel.dailyClasses.isEmpty {
-            Text("No classes scheduled for this day.").font(.subheadline).foregroundColor(.gray).padding()
-        } else {
-            VStack(alignment: .leading, spacing: 20) {
-                ForEach(viewModel.dailyClasses) { item in
-                    ClassAttendanceRow(
-                        subject: item.subject,
-                        classTime: item.classTime,
-                        record: item.record,
-                        viewModel: viewModel
-                    )
+                    .frame(maxWidth: .infinity)
+                    .padding()
+            } else {
+                VStack(alignment: .leading, spacing: 20) {
+                    ForEach(viewModel.dailyClasses) { item in
+                        ClassAttendanceRow(
+                            subject: item.subject,
+                            classTime: item.classTime,
+                            record: item.record,
+                            viewModel: viewModel
+                        )
+                    }
                 }
-            }.padding()
+                .frame(maxWidth: .infinity)
+                .padding()
+            }
         }
     }
 }
 
-// MARK: - Class Attendance Row
+// MARK: - Class Attendance Row (Unchanged)
 struct ClassAttendanceRow: View {
     let subject: Subject
     let classTime: ClassTime
@@ -239,7 +335,7 @@ struct ClassAttendanceRow: View {
                 ZStack {
                     Circle()
                         .fill(labelColor)
-                        .frame(width: 50, height: 50)
+                        .frame(width: 56, height: 56)
                         .shadow(color: labelColor.opacity(0.3), radius: 3, x: 0, y: 2)
                     
                     Text(statusLetter)
@@ -247,11 +343,15 @@ struct ClassAttendanceRow: View {
                         .foregroundStyle(.white)
                         .minimumScaleFactor(0.8)
                 }
+                .padding(12)
+
+                .contentShape(Rectangle())
+                .compositingGroup()
+                
                 .rotation3DEffect(
                     .degrees(rotation),
                     axis: (x: 0.0, y: 1.0, z: 0.0)
                 )
-                // [Modified] Slower animation (1.5s response) with slight delay
                 .animation(.spring(response: 1.5, dampingFraction: 0.6).delay(0.1), value: rotation)
             }
         }
@@ -264,10 +364,7 @@ struct ClassAttendanceRow: View {
         if record.status != newStatus {
             let generator = UIImpactFeedbackGenerator(style: .medium)
             generator.impactOccurred()
-            
-            // Just update rotation state; the modifier above handles the animation timing
             rotation += 360
-            
             viewModel.updateAttendance(for: record, in: subject, to: newStatus)
         }
     }

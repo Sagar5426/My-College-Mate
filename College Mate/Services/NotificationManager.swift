@@ -64,7 +64,7 @@ class NotificationManager {
                 guard let hour = components.hour, let minute = components.minute else { continue }
                 
                 // 1. Notification at exact class time
-                var content = UNMutableNotificationContent()
+                let content = UNMutableNotificationContent()
                 content.title = "Class Started: \(subject.name)"
                 // Removed roomNo as it doesn't exist in the Schedule/ClassTime model
                 content.body = "Your class is scheduled now."
@@ -103,7 +103,7 @@ class NotificationManager {
                     if let baseDate = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: today),
                        let priorDate = calendar.date(byAdding: .minute, value: -priorMinutes, to: baseDate) {
                         
-                        let priorComponents = calendar.dateComponents([.hour, .minute], from: priorDate)
+                        _ = calendar.dateComponents([.hour, .minute], from: priorDate)
                         
                         var priorTriggerDate = DateComponents()
                         priorTriggerDate.weekday = weekday // Same day (assuming lead time < 24 hrs and doesn't cross midnight heavily in a way that changes weekday for most classes)
@@ -125,7 +125,7 @@ class NotificationManager {
                             priorTriggerDate.minute = shiftedComps.minute
                         }
                         
-                        var preContent = UNMutableNotificationContent()
+                        let preContent = UNMutableNotificationContent()
                         preContent.title = "Upcoming Class: \(subject.name)"
                         // Removed roomNo
                         preContent.body = "Starts in \(priorMinutes) minutes."
