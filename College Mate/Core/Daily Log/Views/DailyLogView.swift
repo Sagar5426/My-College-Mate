@@ -158,8 +158,6 @@ struct ControlPanelView: View {
                         .padding(.trailing, 8)
                 }
                 
-                // DATE LABEL CONTAINER
-                // ZStack ensures incoming/outgoing text occupy the exact same center point
                 ZStack {
                     Button(action: {
                         let generator = UIImpactFeedbackGenerator(style: .medium)
@@ -173,17 +171,15 @@ struct ControlPanelView: View {
                             .foregroundStyle(.primary)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
-                            // ID and Transition applied strictly to the Text content
                             .id(viewID)
                             .transition(transition)
-                            .frame(maxWidth: .infinity) // Text takes full width of the ZStack
-                    }
+                            .frame(maxWidth: .infinity)                     }
                     .buttonStyle(.plain)
                 }
-                .frame(height: 30) // Fixed height to prevent vertical jitter
-                .frame(maxWidth: .infinity) // Fills space between chevrons
-                .compositingGroup() // <--- KEY FIX: Flattens view for accurate clipping
-                .clipped()          // <--- KEY FIX: Clips outgoing text at exactly this edge
+                .frame(height: 30)
+                .frame(maxWidth: .infinity)
+                .compositingGroup()
+                .clipped()
                 
                 // RIGHT CHEVRON (Static)
                 Button(action: {
@@ -296,27 +292,25 @@ struct ClassAttendanceRow: View {
                     .font(.title2)
                     .foregroundStyle(.primary)
                 
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 0) {
                     if let start = classTime.startTime, let end = classTime.endTime {
                         HStack(spacing: 4) {
                             Image(systemName: "clock")
-                                .font(.caption)
                             Text("\(formattedTime(start)) - \(formattedTime(end))")
                         }
                     }
                     
                     if !classTime.roomNumber.isEmpty {
                         Text("Room: \(classTime.roomNumber)")
-                            .font(.subheadline)
                     }
+                    
+                    Text("Attendance: \(Int(percentage))%")
+                        .foregroundColor(isAboveThreshold ? .green : .red)
+                        .padding(.top, 2)
                 }
-                .font(.subheadline)
+                .font(.caption)
                 .foregroundStyle(.secondary)
                 
-                Text("Attendance: \(Int(percentage))%")
-                    .font(.caption)
-                    .foregroundColor(isAboveThreshold ? .green : .red)
-                    .padding(.top, 2)
             }
             
             Spacer()
