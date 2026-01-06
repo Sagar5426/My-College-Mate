@@ -8,10 +8,14 @@ struct EditSubjectView: View {
     @Binding var isShowingEditSubjectView: Bool
     
     @State private var originalSubjectName: String = ""
-    @State private var isShowingDuplicateAlert = false
+    
+    // Alert States
+    @State private var isShowingAlert = false
+    @State private var alertTitle = ""
+    @State private var alertMessage = ""
     
     let daysOfWeek = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-    let characterLimit = 20 // Stricter character limit
+    let characterLimit = 20
     
     @State private var selectedDays: Set<String> = []
     @State private var classTimes: [String: [ClassPeriodTime]] = [:]
@@ -25,14 +29,21 @@ struct EditSubjectView: View {
                     Section(header: Text("Subject Details")) {
                         TextField("Subject Name (Max 20 Characters)", text: $subject.name)
                             .onChange(of: subject.name) {
-                                subject.name = String(subject.name.prefix(characterLimit))
+                                if subject.name.count > characterLimit {
+                                    subject.name = String(subject.name.prefix(characterLimit))
+                                }
                             }
+                        if subject.name.count >= characterLimit {
+                            Text("Maximum character limit reached")
+                                .font(.caption)
+                                .foregroundStyle(.red)
+                        }
                     }
                     FirstSubjectDatePicker(startDateOfSubject: $subject.startDateOfSubject)
                     
                     MinimumAttendenceStepper(MinimumAttendancePercentage: Binding<Int>(
-                        get: { Int(subject.attendance?.minimumPercentageRequirement ?? 75.0) }, // Read from optional
-                        set: { subject.attendance?.minimumPercentageRequirement = Double($0) } // Write to optional
+                        get: { Int(subject.attendance?.minimumPercentageRequirement ?? 75.0) },
+                        set: { subject.attendance?.minimumPercentageRequirement = Double($0) }
                     ))
                     
                     ClassScheduleSection(
@@ -45,12 +56,9 @@ struct EditSubjectView: View {
                 .scrollContentBackground(.hidden)
                 .background(Color.clear)
                 .onAppear {
+                    // Capture the original name when the view appears
                     originalSubjectName = subject.name
                     populateExistingData()
-                }
-                
-                .onDisappear {
-                    saveUpdatedData()
                 }
                 .navigationTitle("Edit Subject")
                 .navigationBarTitleDisplayMode(.inline)
@@ -61,170 +69,177 @@ struct EditSubjectView: View {
                         }
                     }
                 }
-                .alert("Duplicate Subject", isPresented: $isShowingDuplicateAlert) {
+                .alert(alertTitle, isPresented: $isShowingAlert) {
                     Button("OK") { }
                 } message: {
-                    Text("A subject with this name already exists. Please choose a different name.")
+                    Text(alertMessage)
+                }
+            }
+        }
+    }
+    
+    private func validateAndSaveChanges() {
+        var errors: [String] = []
+        
+        // 1. Validate Name
+        let trimmedName = subject.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedName.isEmpty {
+            errors.append("• Subject Name is required.")
+        }
+        
+        // 2. Validate Duplicates (Excluding self)
+        if !trimmedName.isEmpty {
+            let lowercasedNew = trimmedName.lowercased()
+            let hasDuplicate = subjects.contains { other in
+                if other.persistentModelID == subject.persistentModelID { return false }
+                return other.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == lowercasedNew
+            }
+            if hasDuplicate {
+                errors.append("• A subject with this name already exists.")
+            }
+        }
+        
+        // 3. Validate Days
+        if selectedDays.isEmpty {
+            errors.append("• Please select at least one day for classes.")
+        }
+        
+        // 4. Validate Room Number & Time Logic
+        for day in selectedDays {
+            if let times = classTimes[day] {
+                for (index, time) in times.enumerated() {
+                    // Room Validation
+                    if time.roomNumber.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        errors.append("• Room number missing for \(day) (Class \(index + 1)).")
+                    }
+                    
+                    // Time Validation
+                    if let start = time.startTime, let end = time.endTime {
+                        if start >= end {
+                             errors.append("• End time cannot be before or equal to start time for \(day) (Class \(index + 1)).")
+                        }
+                    }
                 }
             }
         }
         
-    }
-    
-    private func validateAndSaveChanges() {
-        // Trim whitespace/newlines and enforce character limit again (defensive)
-        let trimmedName = subject.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        let newName = String(trimmedName.prefix(characterLimit))
-
-        // Prevent empty names
-        guard !newName.isEmpty else {
-            isShowingDuplicateAlert = true
-            // Revert to original valid name
-            subject.name = originalSubjectName
+        // Check for Errors
+        if !errors.isEmpty {
+            alertTitle = "Validation Error"
+            alertMessage = "Please correct the following issues:\n\n" + errors.joined(separator: "\n")
+            isShowingAlert = true
+            
+            // Revert name if invalid
+            if trimmedName.isEmpty || errors.contains(where: { $0.contains("exists") }) {
+                subject.name = originalSubjectName
+            }
             return
         }
 
-        // Determine if name actually changed (case-insensitive for comparison but preserve casing for storage)
+        // --- Logic if validation passes ---
+        
+        let newName = trimmedName
         let nameChanged = newName.lowercased() != originalSubjectName.lowercased()
-
-        // Duplicate check should EXCLUDE the current subject
-        if nameChanged {
-            let lowercasedNew = newName.lowercased()
-            let hasDuplicate = subjects.contains { other in
-                // Exclude the current subject instance by comparing persistent identifiers
-                if other.persistentModelID == subject.persistentModelID { return false }
-                return other.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == lowercasedNew
-            }
-
-            if hasDuplicate {
-                isShowingDuplicateAlert = true
-                // Revert visible text to original name
-                subject.name = originalSubjectName
-                return
-            }
-        }
-
-        // Apply the normalized name back to the model
-        subject.name = newName
-
-        // If validation passes, move files and dismiss
+        
+        // 1. If name changed, move files FIRST before saving the new name to the model permanently
+        // (Although Bindable updates it live, we use the original capture for the old path)
         if nameChanged {
             moveFilesToNewFolder(oldName: originalSubjectName, newName: newName)
         }
+        
+        // 2. Update Model
+        subject.name = newName
+        saveUpdatedData()
+        
         isShowingEditSubjectView = false
     }
     
     private func populateExistingData() {
         for schedule in (subject.schedules ?? []) {
             selectedDays.insert(schedule.day)
-            // Convert ClassTime to ClassPeriodTime
             classTimes[schedule.day] = (schedule.classTimes ?? []).map { classTime in
-                ClassPeriodTime(startTime: classTime.startTime, endTime: classTime.endTime)
+                ClassPeriodTime(
+                    startTime: classTime.startTime,
+                    endTime: classTime.endTime,
+                    roomNumber: classTime.roomNumber
+                )
             }
             classCount[schedule.day] = (schedule.classTimes ?? []).count
         }
     }
     
     private func saveUpdatedData() {
+        // Reconstruct schedules from the view state
         subject.schedules = selectedDays.map { day in
             let schedule = Schedule(day: day)
-            // Map ClassPeriodTime back to ClassTime
             schedule.classTimes = classTimes[day]?.map { classPeriodTime in
-                ClassTime(startTime: classPeriodTime.startTime, endTime: classPeriodTime.endTime, date: Date())
+                ClassTime(
+                    startTime: classPeriodTime.startTime,
+                    endTime: classPeriodTime.endTime,
+                    date: Date(),
+                    roomNumber: classPeriodTime.roomNumber
+                )
             } ?? []
             return schedule
         }
         
-        // Reschedule notifications when data is saved ---
         let subjectToSchedule = subject
         Task {
             await NotificationManager.shared.scheduleNotifications(for: subjectToSchedule)
         }
     }
-    
 }
-
-// Helper to access a stable identifier when available; optional for SwiftData models
-// private extension PersistentModel {
-//     var persistentModelID: PersistentIdentifier { self.persistentModelID }
-// }
-
-//#Preview {
-//    struct PreviewWrapper: View {
-//        var body: some View {
-//            do {
-//                // Add ALL models to the container
-//                let config = ModelConfiguration(isStoredInMemoryOnly: true)
-//                let container = try ModelContainer(for: [
-//                    Subject.self,
-//                    Attendance.self,
-//                    Schedule.self,
-//                    ClassTime.self,
-//                    Note.self,
-//                    Folder.self,
-//                    FileMetadata.self,
-//                    AttendanceRecord.self
-//                ], configurations: config)
-//                
-//                // Use the default init() and set properties
-//                let subject = Subject()
-//                subject.name = "Math"
-//                subject.startDateOfSubject = Date()
-//                subject.schedules = []
-//                subject.attendance = Attendance(totalClasses: 10, attendedClasses: 8)
-//                
-//                container.mainContext.insert(subject)
-//                
-//                return EditSubjectView(subject: subject, isShowingEditSubjectView: .constant(true))
-//                    .modelContainer(container)
-//                
-//            } catch {
-//                return Text("Failed to create container: \(error.localizedDescription)")
-//            }
-//        }
-//    }
-//    
-//    PreviewWrapper()
-//}
 
 // MARK: Helper Views
 extension EditSubjectView {
+    
+    /// Renames the subject folder on disk to match the new subject name.
     func moveFilesToNewFolder(oldName: String, newName: String) {
         let fileManager = FileManager.default
-        
         let oldFolderURL = FileDataService.baseFolder.appendingPathComponent(oldName)
         let newFolderURL = FileDataService.baseFolder.appendingPathComponent(newName)
         
-        do {
-            if fileManager.fileExists(atPath: oldFolderURL.path) {
-                if !fileManager.fileExists(atPath: newFolderURL.path) {
-                    try fileManager.createDirectory(at: newFolderURL, withIntermediateDirectories: true)
+        // 1. Check if the old folder exists
+        guard fileManager.fileExists(atPath: oldFolderURL.path) else {
+            return // Nothing to move
+        }
+        
+        // 2. Check if the new folder already exists (edge case)
+        if fileManager.fileExists(atPath: newFolderURL.path) {
+            do {
+                // If it's empty, delete it so we can rename the old one to this name
+                let contents = try fileManager.contentsOfDirectory(atPath: newFolderURL.path)
+                if contents.isEmpty {
+                    try fileManager.removeItem(at: newFolderURL)
+                } else {
+                    // If new folder exists and isn't empty, we must move contents manually (Merge)
+                    // This is a fallback, but the atomic move (rename) below is preferred.
+                    for file in try fileManager.contentsOfDirectory(at: oldFolderURL, includingPropertiesForKeys: nil) {
+                        let target = newFolderURL.appendingPathComponent(file.lastPathComponent)
+                        if !fileManager.fileExists(atPath: target.path) {
+                            try fileManager.moveItem(at: file, to: target)
+                        }
+                    }
+                    // Clean up old folder
+                    try? fileManager.removeItem(at: oldFolderURL)
+                    return
                 }
-                
-                let files = try fileManager.contentsOfDirectory(at: oldFolderURL, includingPropertiesForKeys: nil)
-                for file in files {
-                    let newFileURL = newFolderURL.appendingPathComponent(file.lastPathComponent)
-                    try fileManager.moveItem(at: file, to: newFileURL)
-                }
-                
-                // Delete old folder if empty
-                let remainingFiles = try fileManager.contentsOfDirectory(atPath: oldFolderURL.path)
-                if remainingFiles.isEmpty {
-                    try fileManager.removeItem(at: oldFolderURL)
-                }
+            } catch {
+                print("Error handling existing destination folder: \(error)")
+                return
             }
+        }
+        
+        // 3. Perform atomic rename (Move directory)
+        do {
+            try fileManager.moveItem(at: oldFolderURL, to: newFolderURL)
+            print("Successfully renamed folder from \(oldName) to \(newName)")
         } catch {
-            print("Failed to move files: \(error.localizedDescription)")
+            print("Failed to rename folder: \(error.localizedDescription)")
         }
     }
     
-    // We now use FileDataService.baseFolder to get the correct container
     func getFolderURL(for subjectName: String) -> URL {
-        // This is the OLD, incorrect path:
-        // let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        // return documentsDirectory.appendingPathComponent("Subjects").appendingPathComponent(subjectName)
-        
-        // This is the NEW, correct path:
         return FileDataService.baseFolder.appendingPathComponent(subjectName)
     }
 }

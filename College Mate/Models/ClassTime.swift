@@ -8,14 +8,16 @@ class ClassTime {
     var date: Date?
     var startTime: Date?
     var endTime: Date?
+    var roomNumber: String = ""
     
     var schedule: Schedule?
     
-    init(startTime: Date? = nil, endTime: Date? = nil, date: Date? = Date()) {
+    init(startTime: Date? = nil, endTime: Date? = nil, date: Date? = Date(), roomNumber: String = "") {
         self.id = UUID()
         self.startTime = startTime
         self.endTime = endTime
         self.date = date
+        self.roomNumber = roomNumber
     }
     
     init() {}
@@ -25,4 +27,5 @@ class ClassTime {
 struct ClassPeriodTime: Hashable {
     var startTime: Date?
     var endTime: Date?
+    var roomNumber: String = ""
 }

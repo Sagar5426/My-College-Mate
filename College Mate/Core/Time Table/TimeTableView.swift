@@ -172,9 +172,15 @@ struct ScheduleCard: View {
                 .frame(width: 4)
             
             VStack(alignment: .leading, spacing: 8) {
-                Text(subject.name)
-                    .font(.headline)
-                    .foregroundStyle(.white)
+                HStack {
+                    Text(subject.name)
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                                    
+                    Text("(Room: \(classTime.roomNumber))")
+                        .font(.subheadline)
+                        .foregroundStyle(.gray)
+                }
                 
                 // It now uses the specific start and end times from the ClassTime object.
                 HStack {

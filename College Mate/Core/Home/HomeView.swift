@@ -24,7 +24,7 @@ struct HomeView: View {
                 }
                 .tag("Subjects")
             
-            AttendanceView()
+            DailyLogView()
                 .tabItem {
                     Label("Daily Log", systemImage: "calendar.circle.fill")
                 }

@@ -1,20 +1,29 @@
 import SwiftUI
 import SwiftData
 
+// A helper struct to flatten the hierarchy for sorting
+struct DailyClassItem: Identifiable {
+    let id: UUID
+    let subject: Subject
+    let classTime: ClassTime
+    let record: AttendanceRecord
+}
+
 @MainActor
-class AttendanceViewModel: ObservableObject {
+class DailyLogViewModel: ObservableObject {
     
     // MARK: - Properties
     @Published var selectedDate = Date() {
         didSet {
-            filterScheduledSubjects()
-            checkHolidayStatus()
+            refreshDailyClasses()
         }
     }
     @Published var isHoliday = false
     @Published var isShowingDatePicker = false
     @Published var isShowingProfileView = false
-    @Published var scheduledSubjects: [Subject] = []
+    
+    // Flattened list sorted by time
+    @Published var dailyClasses: [DailyClassItem] = []
     
     private var allSubjects: [Subject] = []
     private var modelContext: ModelContext?
@@ -27,8 +36,7 @@ class AttendanceViewModel: ObservableObject {
     func setup(subjects: [Subject], modelContext: ModelContext) {
         self.allSubjects = subjects
         self.modelContext = modelContext
-        filterScheduledSubjects()
-        checkHolidayStatus()
+        refreshDailyClasses()
     }
 
     func moveToPreviousDay() {
@@ -44,25 +52,20 @@ class AttendanceViewModel: ObservableObject {
         }
     }
     
-    /// Toggles the holiday status for all classes on the selected date.
     func toggleHoliday() {
         let newHolidayState = !isHoliday
         
-        // Find all classes scheduled for this day.
-        for subject in scheduledSubjects {
-            for schedule in (subject.schedules ?? []) where schedule.day == selectedDate.formatted(.dateTime.weekday(.wide)) {
-                for classTime in (schedule.classTimes ?? []) {
-                    let record = self.record(for: classTime, in: subject)
-                    record.isHoliday = newHolidayState
-                    
-                    if newHolidayState {
-                        if record.status != "Canceled" {
-                            updateAttendance(for: record, in: subject, to: "Canceled")
-                        }
-                    }
+        // Update all classes in the current view
+        for item in dailyClasses {
+            item.record.isHoliday = newHolidayState
+            
+            if newHolidayState {
+                if item.record.status != "Canceled" {
+                    updateAttendance(for: item.record, in: item.subject, to: "Canceled")
                 }
             }
         }
+        // Refresh to check if the day is still a holiday (it will be)
         checkHolidayStatus()
     }
     
@@ -111,31 +114,60 @@ class AttendanceViewModel: ObservableObject {
         let log = AttendanceLogEntry(timestamp: Date(), subjectName: subject.name, action: logAction)
         
         subject.logs.append(log)
+        
+        // Trigger UI refresh if needed
+        objectWillChange.send()
     }
     
     // MARK - Private Helper Methods
     
-    /// Checks if any class record for the selected date is marked as a holiday.
+    private func refreshDailyClasses() {
+        let dayOfWeek = selectedDate.formatted(Date.FormatStyle().weekday(.wide))
+        var items: [DailyClassItem] = []
+        
+        // 1. Filter Subjects relevant to today
+        let todaySubjects = allSubjects.filter { subject in
+            selectedDate >= subject.startDateOfSubject
+        }
+        
+        // 2. Flatten Schedules
+        for subject in todaySubjects {
+            for schedule in (subject.schedules ?? []) where schedule.day == dayOfWeek {
+                for classTime in (schedule.classTimes ?? []) {
+                    // Fetch or Create Record
+                    let rec = self.record(for: classTime, in: subject)
+                    items.append(DailyClassItem(id: classTime.id, subject: subject, classTime: classTime, record: rec))
+                }
+            }
+        }
+        
+        // 3. Sort by Start Time
+        items.sort {
+            ($0.classTime.startTime ?? .distantPast) < ($1.classTime.startTime ?? .distantPast)
+        }
+        
+        self.dailyClasses = items
+        checkHolidayStatus()
+    }
+    
     private func checkHolidayStatus() {
         self.isHoliday = isHoliday(on: selectedDate)
     }
     
-    /// A reusable function to check the holiday status of any given date from the database.
     private func isHoliday(on date: Date) -> Bool {
         let targetDate = Calendar.current.startOfDay(for: date)
+        // Check if ANY record on this day is marked as holiday.
+        // Since we now have `dailyClasses`, we can check that if the date matches selectedDate
+        if Calendar.current.isDate(date, inSameDayAs: selectedDate) {
+             return dailyClasses.contains { $0.record.isHoliday }
+        }
+        
+        // Fallback for other dates (scan all subjects)
         for subject in allSubjects {
             if (subject.records ?? []).contains(where: { Calendar.current.isDate($0.date, inSameDayAs: targetDate) && $0.isHoliday }) {
                 return true
             }
         }
         return false
-    }
-    
-    private func filterScheduledSubjects() {
-        let dayOfWeek = selectedDate.formatted(Date.FormatStyle().weekday(.wide))
-        scheduledSubjects = allSubjects.filter { subject in
-            guard selectedDate >= subject.startDateOfSubject else { return false }
-            return (subject.schedules ?? []).contains { $0.day == dayOfWeek }
-        }
     }
 }

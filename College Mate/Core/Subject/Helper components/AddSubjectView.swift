@@ -2,7 +2,6 @@ import SwiftUI
 import SwiftData
 import CoreHaptics
 
-
 struct AddSubjectView: View {
     
     @Environment(\.modelContext) var modelContext
@@ -15,7 +14,12 @@ struct AddSubjectView: View {
     @State private var selectedDays: Set<String> = []
     @State private var classTimes: [String: [ClassPeriodTime]] = [:]
     @State private var classCount: [String: Int] = [:]
-    @State private var isShowingDuplicateAlert = false
+    
+    // Alert States
+    @State private var isShowingAlert = false
+    @State private var alertTitle = ""
+    @State private var alertMessage = ""
+    
     private let characterLimit = 20
     
     let daysOfWeek = [
@@ -38,16 +42,15 @@ struct AddSubjectView: View {
                     )
                 }
                 .scrollContentBackground(.hidden)
-                .background(Color.clear) //
+                .background(Color.clear)
                 .navigationTitle("Add Subject")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button("Save") {
-                            saveSubject()
+                            validateAndSave()
                         }
-                        .disabled(!isAllInfoValid)
-                        .tint(isAllInfoValid ? .blue : .gray)
+                        .tint(.blue)
                     }
                     
                     ToolbarItem(placement: .topBarLeading) {
@@ -56,36 +59,69 @@ struct AddSubjectView: View {
                         }
                     }
                 }
-                .alert("Duplicate Subject", isPresented: $isShowingDuplicateAlert) {
+                .alert(alertTitle, isPresented: $isShowingAlert) {
                     Button("OK") { }
                 } message: {
-                    Text("A subject with this name already exists. Please choose a different name.")
+                    Text(alertMessage)
                 }
             }
         }
     }
     
-    private func saveSubject() {
-        // Normalize name: trim and enforce character limit
-        let trimmed = subjectName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let normalizedName = String(trimmed.prefix(characterLimit))
+    private func validateAndSave() {
+        var errors: [String] = []
         
-        // Prevent empty names
-        guard !normalizedName.isEmpty else {
-            isShowingDuplicateAlert = true
-            return
+        // 1. Validate Name
+        let trimmedName = subjectName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedName.isEmpty {
+            errors.append("• Subject Name is required.")
         }
         
-        // Check for duplicates among ALL subjects (case-insensitive)
+        // 2. Validate Duplicate Name
         let hasDuplicate = subjects.contains {
-            $0.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == normalizedName.lowercased()
+            $0.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == trimmedName.lowercased()
+        }
+        if hasDuplicate {
+            errors.append("• A subject with this name already exists.")
         }
         
-        guard !hasDuplicate else {
-            isShowingDuplicateAlert = true
+        // 3. Validate Days Selection
+        if selectedDays.isEmpty {
+            errors.append("• Please select at least one day for classes.")
+        }
+        
+        // 4. Validate Class Details (Room & Time)
+        for day in selectedDays {
+            if let times = classTimes[day] {
+                for (index, time) in times.enumerated() {
+                    // Check Room Number
+                    if time.roomNumber.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        errors.append("• Room number missing for \(day) (Class \(index + 1)).")
+                    }
+                    
+                    // Check Time Logic
+                    if let start = time.startTime, let end = time.endTime {
+                        if start >= end {
+                            errors.append("• End time cannot be before or equal to start time for \(day) (Class \(index + 1)).")
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Show Alert if Errors Exist
+        if !errors.isEmpty {
+            alertTitle = "Validation Error"
+            alertMessage = "Please correct the following issues:\n\n" + errors.joined(separator: "\n")
+            isShowingAlert = true
             return
         }
         
+        // Proceed to Save if valid
+        saveSubject(normalizedName: trimmedName)
+    }
+    
+    private func saveSubject(normalizedName: String) {
         let newSubject = Subject(name: normalizedName)
         newSubject.startDateOfSubject = startDateOfSubject
         
@@ -100,22 +136,22 @@ struct AddSubjectView: View {
         // Create schedules for the selected days
         for day in selectedDays {
             let newSchedule = Schedule(day: day)
-            
             newSchedule.classTimes = []
 
-            // Add class times to the schedule
             if let times = classTimes[day] {
                 for time in times {
-                    let newClassTime = ClassTime(startTime: time.startTime, endTime: time.endTime, date: Date())
+                    let newClassTime = ClassTime(
+                        startTime: time.startTime,
+                        endTime: time.endTime,
+                        date: Date(),
+                        roomNumber: time.roomNumber
+                    )
                     newSchedule.classTimes?.append(newClassTime)
                 }
             }
-            
-            // Add the schedule to the subject
             newSubject.schedules?.append(newSchedule)
         }
         
-        // Add the new Subject to the modelContext
         modelContext.insert(newSubject)
         
         let subjectToSchedule = newSubject
@@ -123,31 +159,36 @@ struct AddSubjectView: View {
             await NotificationManager.shared.scheduleNotifications(for: subjectToSchedule)
         }
         
-        // Reset form fields
+        // Reset and Dismiss
         subjectName = ""
         selectedDays.removeAll()
         classTimes.removeAll()
         classCount.removeAll()
         
         FileDataService.createSubjectFolder(for: newSubject)
-        
         print("Subject saved successfully.")
         isShowingAddSubjectView = false
     }
-    
 }
 
 // MARK: Helper Views
 struct SubjectDetailsSection: View {
     @Binding var subjectName: String
-    let characterLimit = 20 // Stricter character limit
+    let characterLimit = 20
 
     var body: some View {
         Section(header: Text("Subject Details")) {
             TextField("Subject Name (Max 20 Characters)", text: $subjectName)
                 .onChange(of: subjectName) {
-                    subjectName = String(subjectName.prefix(characterLimit))
+                    if subjectName.count > characterLimit {
+                        subjectName = String(subjectName.prefix(characterLimit))
+                    }
                 }
+            if subjectName.count >= characterLimit {
+                Text("Maximum character limit reached")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
         }
     }
 }
@@ -193,7 +234,6 @@ struct ClassScheduleSection: View {
     }
 }
 
-
 struct DayRowView: View {
     let day: String
     @Binding var isSelected: Bool
@@ -215,9 +255,12 @@ struct DayRowView: View {
                     Picker("Number of Classes", selection: Binding(
                         get: { count },
                         set: { newValue in
-                            // Resize `times` array safely when `count` changes
                             if newValue > times.count {
-                                times.append(contentsOf: Array(repeating: ClassPeriodTime(startTime: nil, endTime: nil), count: newValue - times.count))
+                                // Initialize new slots with valid times
+                                let now = Date()
+                                let later = Calendar.current.date(byAdding: .hour, value: 1, to: now)!
+                                let newItems = Array(repeating: ClassPeriodTime(startTime: now, endTime: later), count: newValue - times.count)
+                                times.append(contentsOf: newItems)
                             } else {
                                 times.removeLast(times.count - newValue)
                             }
@@ -237,6 +280,17 @@ struct DayRowView: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .bold()
+                            
+                            TextField("Room Number (Required)", text: Binding(
+                                get: { times[index].roomNumber },
+                                set: { times[index].roomNumber = $0 }
+                            ))
+                            .padding(8)
+                            .background(Color.gray.opacity(0.1))
+                            .cornerRadius(8)
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 5)
+
                             HStack(alignment: .bottom) {
                                 VStack {
                                     Text("Start Time")
@@ -259,64 +313,17 @@ struct DayRowView: View {
                             .padding(.horizontal, 20)
                         }
                     }
-                    
                 }
             }
         }
     }
     
-    /// Converts a number to its ordinal representation (e.g., 1 -> "1st", 2 -> "2nd").
     private func ordinalNumber(for number: Int) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .ordinal
         return formatter.string(from: NSNumber(value: number)) ?? "\(number)"
     }
 }
-
-
-
-//#Preview {
-//    struct PreviewWrapper: View {
-//        var body: some View {
-//            do {
-//                // Add ALL models to the container
-//                let config = ModelConfiguration(isStoredInMemoryOnly: true)
-//                let container = try ModelContainer(for: [
-//                    Subject.self,
-//                    Attendance.self,
-//                    Schedule.self,
-//                    ClassTime.self,
-//                    Note.self,
-//                    Folder.self,
-//                    FileMetadata.self,
-//                    AttendanceRecord.self
-//                ], configurations: config)
-//                
-//                NavigationStack {
-//                    AddSubjectView(isShowingAddSubjectView: .constant(true))
-//                }
-//                .modelContainer(container)
-//                
-//            } catch {
-//                Text("Failed to create preview: \(error.localizedDescription)")
-//            }
-//        }
-//    }
-//    
-//    PreviewWrapper()
-//}
-
-
-extension AddSubjectView {
-    var isAllInfoValid: Bool {
-        let trimmed = subjectName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let normalized = String(trimmed.prefix(20))
-        guard !normalized.isEmpty else { return false }
-        guard !selectedDays.isEmpty else { return false }
-        return true
-    }
-}
-
 
 struct FirstSubjectDatePicker: View {
     @Binding var startDateOfSubject: Date

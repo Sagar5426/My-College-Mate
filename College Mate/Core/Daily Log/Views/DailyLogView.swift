@@ -2,11 +2,11 @@ import SwiftUI
 import SwiftData
 import CoreData
 
-struct AttendanceView: View {
+struct DailyLogView: View {
     @Environment(\.modelContext) private var modelContext
     @Query var subjects: [Subject]
     
-    @StateObject private var viewModel = AttendanceViewModel()
+    @StateObject private var viewModel = DailyLogViewModel()
     @State private var viewID = UUID()
     
     var body: some View {
@@ -18,7 +18,6 @@ struct AttendanceView: View {
                         Divider().padding(.vertical)
                         ClassesList(viewModel: viewModel)
                     } header: {
-                        // A GeometryReader is used here to get the size of the parent view.
                         GeometryReader { proxy in
                             HeaderView(size: proxy.size, title: "Attendance 🙋", isShowingProfileView: $viewModel.isShowingProfileView)
                         }
@@ -52,12 +51,8 @@ struct AttendanceView: View {
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextObjectsDidChange)) { notification in
-                // Check if the notification is from a background thread
                 if !Thread.isMainThread {
-                    // This is a remote sync.
-                    // Dispatch the UI update to the main thread.
                     DispatchQueue.main.async {
-                        print("[AttendanceView] Received REMOTE modelContext did change. Forcing refresh.")
                         viewID = UUID()
                     }
                 }
@@ -75,7 +70,7 @@ struct AttendanceView: View {
 
 // MARK: - Control Panel View
 struct ControlPanelView: View {
-    @ObservedObject var viewModel: AttendanceViewModel
+    @ObservedObject var viewModel: DailyLogViewModel
     
     private var isNextDayDisabled: Bool { Calendar.current.isDateInToday(viewModel.selectedDate) }
     
@@ -122,7 +117,7 @@ struct ControlPanelView: View {
             .font(.title)
             .foregroundStyle(.blue)
             
-            if !viewModel.scheduledSubjects.isEmpty {
+            if !viewModel.dailyClasses.isEmpty {
                 Button(action: {
                     let generator = UIImpactFeedbackGenerator(style: .medium)
                     generator.impactOccurred()
@@ -143,20 +138,14 @@ struct ControlPanelView: View {
         .padding()
         .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 15))
-        .animation(.easeOut(duration: 0.25), value: viewModel.scheduledSubjects.isEmpty)
+        .animation(.easeOut(duration: 0.25), value: viewModel.dailyClasses.isEmpty)
     }
 }
 
 
-// MARK: - Other Subviews
+// MARK: - Classes List
 struct ClassesList: View {
-    @ObservedObject var viewModel: AttendanceViewModel
-    
-    /// This helper function breaks up the complex expression that was confusing the compiler.
-    private func scheduledSchedules(for subject: Subject) -> [Schedule] {
-        let dayOfWeek = viewModel.selectedDate.formatted(Date.FormatStyle().weekday(.wide))
-        return (subject.schedules ?? []).filter { $0.day == dayOfWeek }
-    }
+    @ObservedObject var viewModel: DailyLogViewModel
     
     var body: some View {
         if viewModel.isHoliday {
@@ -170,30 +159,31 @@ struct ClassesList: View {
             }
             .padding(.vertical, 50)
             
-        } else if viewModel.scheduledSubjects.isEmpty {
+        } else if viewModel.dailyClasses.isEmpty {
             Text("No classes scheduled for this day.").font(.subheadline).foregroundColor(.gray).padding()
         } else {
             VStack(alignment: .leading, spacing: 20) {
-                ForEach(viewModel.scheduledSubjects) { subject in
-                    ForEach(scheduledSchedules(for: subject)) { schedule in
-                        ForEach(schedule.classTimes ?? []) { classTime in
-                            ClassAttendanceRow(
-                                subject: subject,
-                                record: viewModel.record(for: classTime, in: subject),
-                                viewModel: viewModel
-                            )
-                        }
-                    }
+                ForEach(viewModel.dailyClasses) { item in
+                    ClassAttendanceRow(
+                        subject: item.subject,
+                        classTime: item.classTime,
+                        record: item.record,
+                        viewModel: viewModel
+                    )
                 }
             }.padding()
         }
     }
 }
 
+// MARK: - Class Attendance Row
 struct ClassAttendanceRow: View {
     let subject: Subject
+    let classTime: ClassTime
     let record: AttendanceRecord
-    @ObservedObject var viewModel: AttendanceViewModel
+    @ObservedObject var viewModel: DailyLogViewModel
+    
+    @State private var rotation: Double = 0.0
     
     private var percentage: Double {
         subject.attendance?.percentage ?? 0.0
@@ -206,34 +196,80 @@ struct ClassAttendanceRow: View {
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 5) {
-                Text(subject.name).font(.title2).foregroundStyle(.primary)
-                Text("Attendance: \(Int(percentage))%").font(.caption)
+                Text(subject.name)
+                    .font(.title2)
+                    .foregroundStyle(.primary)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    if let start = classTime.startTime, let end = classTime.endTime {
+                        HStack(spacing: 4) {
+                            Image(systemName: "clock")
+                                .font(.caption)
+                            Text("\(formattedTime(start)) - \(formattedTime(end))")
+                        }
+                    }
+                    
+                    if !classTime.roomNumber.isEmpty {
+                        Text("Room: \(classTime.roomNumber)")
+                            .font(.subheadline)
+                    }
+                }
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                
+                Text("Attendance: \(Int(percentage))%")
+                    .font(.caption)
                     .foregroundColor(isAboveThreshold ? .green : .red)
+                    .padding(.top, 2)
             }
+            
             Spacer()
+            
             Menu {
                 Button("Attended") {
-                    let generator = UIImpactFeedbackGenerator(style: .light)
-                    generator.impactOccurred()
-                    viewModel.updateAttendance(for: record, in: subject, to: "Attended")
+                    updateStatus(to: "Attended")
                 }
                 Button("Not Attended") {
-                    let generator = UIImpactFeedbackGenerator(style: .light)
-                    generator.impactOccurred()
-                    viewModel.updateAttendance(for: record, in: subject, to: "Not Attended")
+                    updateStatus(to: "Not Attended")
                 }
                 Button("Canceled") {
-                    let generator = UIImpactFeedbackGenerator(style: .light)
-                    generator.impactOccurred()
-                    viewModel.updateAttendance(for: record, in: subject, to: "Canceled")
+                    updateStatus(to: "Canceled")
                 }
             } label: {
-                Text(record.status)
-                    .padding().foregroundColor(.white).background(labelColor)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                ZStack {
+                    Circle()
+                        .fill(labelColor)
+                        .frame(width: 50, height: 50)
+                        .shadow(color: labelColor.opacity(0.3), radius: 3, x: 0, y: 2)
+                    
+                    Text(statusLetter)
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundStyle(.white)
+                        .minimumScaleFactor(0.8)
+                }
+                .rotation3DEffect(
+                    .degrees(rotation),
+                    axis: (x: 0.0, y: 1.0, z: 0.0)
+                )
+                // [Modified] Slower animation (1.5s response) with slight delay
+                .animation(.spring(response: 1.5, dampingFraction: 0.6).delay(0.1), value: rotation)
             }
         }
-        .padding().background(Color.secondary.opacity(0.2)).cornerRadius(10)
+        .padding()
+        .background(Color.secondary.opacity(0.1))
+        .cornerRadius(10)
+    }
+    
+    private func updateStatus(to newStatus: String) {
+        if record.status != newStatus {
+            let generator = UIImpactFeedbackGenerator(style: .medium)
+            generator.impactOccurred()
+            
+            // Just update rotation state; the modifier above handles the animation timing
+            rotation += 360
+            
+            viewModel.updateAttendance(for: record, in: subject, to: newStatus)
+        }
     }
     
     private var labelColor: Color {
@@ -244,48 +280,19 @@ struct ClassAttendanceRow: View {
         default: return .gray
         }
     }
+    
+    private var statusLetter: String {
+        switch record.status {
+        case "Attended": return "P"
+        case "Not Attended": return "A"
+        case "Canceled": return "N/A"
+        default: return "?"
+        }
+    }
+    
+    private func formattedTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
 }
-
-//#Preview {
-//    struct PreviewWrapper: View {
-//        var body: some View {
-//            do {
-
-//                let config = ModelConfiguration(isStoredInMemoryOnly: true)
-//
-
-
-//                let container = try ModelContainer(for:
-//                    Subject.self,
-//                    Attendance.self,
-//                    Schedule.self,
-//                    ClassTime.self,
-//                    Note.self,
-//                    Folder.self,
-//                    FileMetadata.self,
-//                    AttendanceRecord.self
-//                , configurations: config)
-
-//
-//                let todayString = Date().formatted(Date.FormatStyle().weekday(.wide))
-//
-//                let classTime = ClassTime()
-//                let todaySchedule = Schedule(day: todayString)
-//                todaySchedule.classTimes = [classTime]
-//
-//                let subject = Subject(name: "Computer Science")
-//                subject.schedules = [todaySchedule]
-//                subject.attendance = Attendance(totalClasses: 0, attendedClasses: 0)
-//
-//                container.mainContext.insert(subject)
-//
-//                return AttendanceView().modelContainer(container)
-//
-//            } catch {
-//                return Text("Failed to create preview: \(error.localizedDescription)")
-//            }
-//        }
-//    }
-//
-//    return PreviewWrapper()
-//}
