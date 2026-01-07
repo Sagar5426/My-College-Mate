@@ -13,8 +13,8 @@ struct DailyLogView: View {
     @State private var slideDirection: SlideDirection = .forward
     
     enum SlideDirection {
-        case forward   // Future
-        case backward  // Past
+        case forward
+        case backward
     }
     
     // Custom asymmetric transition
@@ -358,7 +358,7 @@ struct ClassAttendanceRow: View {
         if record.status != newStatus {
             let generator = UIImpactFeedbackGenerator(style: .medium)
             generator.impactOccurred()
-            rotation += 360
+            rotation = (rotation == 0 ? 360 : 0)
             viewModel.updateAttendance(for: record, in: subject, to: newStatus)
         }
     }

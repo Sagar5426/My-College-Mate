@@ -19,6 +19,9 @@ struct CardDetailView: View {
     @State private var folderBeingRenamed: Folder? = nil
     @State private var newFolderNameForRename: String = ""
     
+    // ADDED: Namespace for matched geometry animation
+    @Namespace private var animationNamespace
+    
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     private var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
     private var tileSize: CGFloat { isPad ? 120 : 80 }
@@ -88,6 +91,7 @@ struct CardDetailView: View {
             .alert(singleDeleteAlertTitle, isPresented: $viewModel.isShowingSingleDeleteAlert) {
                 Button("Delete", role: .destructive) {
                     playHaptic(style: .heavy)
+                    playDeleteSound()
                     viewModel.confirmDeleteItem()
                 }
                 Button("Cancel", role: .cancel) {
@@ -100,6 +104,7 @@ struct CardDetailView: View {
             .alert("Delete \(viewModel.selectedItemCount) items?", isPresented: $viewModel.isShowingMultiDeleteAlert) {
                 Button("Delete", role: .destructive) {
                     playHaptic(style: .heavy)
+                    playDeleteSound()
                     viewModel.deleteSelectedItems()
                 }
                 Button("Cancel", role: .cancel) {
@@ -218,7 +223,10 @@ struct CardDetailView: View {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Button("Cancel") {
                     playHaptic(style: .light)
-                    viewModel.toggleEditMode()
+                    // CHANGED: Use standard animation when exiting edit mode (no spring)
+                    withAnimation(.easeInOut(duration: 0.6)) {
+                        viewModel.toggleEditMode()
+                    }
                 }
             }
         } else {
@@ -278,6 +286,7 @@ struct CardDetailView: View {
                 addButton
             }
         }
+        // CHANGED: Removed explicit animation modifier from here to allow individual animations for enter/exit
     }
     
     private var searchBarView: some View {
@@ -352,7 +361,10 @@ struct CardDetailView: View {
                     if !viewModel.isEditing && (!viewModel.filteredFileMetadata.isEmpty || !viewModel.subfolders.isEmpty) {
                          Button {
                              playHaptic(style: .light)
-                             viewModel.toggleEditMode()
+                             // CHANGED: Use spring animation when entering edit mode
+                             withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                                 viewModel.toggleEditMode()
+                             }
                          } label: {
                              Label("Select Items", systemImage: "checkmark.circle")
                          }
@@ -945,6 +957,8 @@ struct CardDetailView: View {
                             .blur(radius: 1.2)
                             .opacity(0.6)
                     }
+                    // CHANGED: ADDED matchedGeometryEffect for transformation
+                    .matchedGeometryEffect(id: "background", in: animationNamespace)
                 )
                 .overlay(
                     // Glass rim
@@ -971,7 +985,7 @@ struct CardDetailView: View {
                 }
         }
         .padding()
-        .transition(.scale.combined(with: .opacity))
+        // CHANGED: REMOVED .transition(.scale.combined(with: .opacity))
         .frame(maxWidth: .infinity, alignment: .bottomTrailing)
     }
     
@@ -1042,11 +1056,15 @@ struct CardDetailView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 4)
-        .background(.thinMaterial)
-        .clipShape(Capsule())
+        // CHANGED: Refactored background to use matchedGeometryEffect and Removed transition
+        .background(
+            Capsule()
+                .fill(.thinMaterial)
+                .matchedGeometryEffect(id: "background", in: animationNamespace)
+        )
+        // .clipShape(Capsule()) // Removed as background is already a capsule shape
         .padding(.horizontal)
         .padding(.bottom, 8)
-        .transition(.move(edge: .bottom).combined(with: .opacity))
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.selectedItemCount)
     }
     
@@ -1178,6 +1196,7 @@ struct PreviewWithShareView: View {
                         }
                 }
                 .buttonStyle(.plain)
+                .padding(.trailing, 4)
             }
         }
         // This modifier prevents the sheet from being dismissed by swiping down
