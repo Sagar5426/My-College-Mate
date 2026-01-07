@@ -1,4 +1,3 @@
-//
 //  HomeView.swift
 //  College Mate
 //
@@ -11,7 +10,6 @@ import SwiftData
 struct HomeView: View {
     @EnvironmentObject var authService: AuthenticationService
     @Query var subjects: [Subject]
-    
     @State private var selectedTab = "Subjects"
     
     var body: some View {

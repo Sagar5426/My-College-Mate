@@ -110,7 +110,29 @@ class DailyLogViewModel: ObservableObject {
         
         record.status = newStatus
         
-        let logAction = newStatus == "Attended" ? "+ Attended" : (newStatus == "Not Attended" ? "- Missed" : (newStatus == "Holiday" ? "🌴 Holiday" : "ø Canceled"))
+        // --- Enhanced Descriptive Logs ---
+        var logAction = ""
+        
+        if newStatus == "Attended" {
+            logAction = "Marked as Present"
+        } else if newStatus == "Not Attended" {
+            logAction = "Marked as Absent"
+        } else if newStatus == "Canceled" {
+            // Context-aware messages for cancellation/reset
+            if record.isHoliday {
+                logAction = "Marked as Holiday"
+            } else if oldStatus == "Attended" {
+                logAction = "Present status reverted"
+            } else if oldStatus == "Not Attended" {
+                logAction = "Absent status reverted"
+            } else {
+                logAction = "Decision reverted"
+            }
+        } else {
+            // Fallback for any other future statuses
+            logAction = "Status updated to \(newStatus)"
+        }
+        
         let log = AttendanceLogEntry(timestamp: Date(), subjectName: subject.name, action: logAction)
         
         subject.logs.append(log)

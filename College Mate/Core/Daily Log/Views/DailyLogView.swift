@@ -322,7 +322,7 @@ struct ClassAttendanceRow: View {
                 Button("Not Attended") {
                     updateStatus(to: "Not Attended")
                 }
-                Button("Canceled") {
+                Button("Select") { // Changed from "Canceled" to "Select"
                     updateStatus(to: "Canceled")
                 }
             } label: {
