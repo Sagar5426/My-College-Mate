@@ -659,9 +659,16 @@ struct CardDetailView: View {
             
             Spacer()
             
+            // NOTE: Order swapped to make selection indicator appear at trailing edge.
+            // When editing, the favorite icon moves to the left of the selection indicator.
             if folder.isFavorite {
                 Image(systemName: "heart.fill")
                     .foregroundColor(.red)
+            }
+
+            if viewModel.isEditing {
+                listSelectionIcon(isSelected: viewModel.selectedFolders.contains(folder))
+                    .padding(.leading, 8) // Ensure separation from heart or content
             }
         }
         .contentShape(Rectangle())
@@ -679,7 +686,6 @@ struct CardDetailView: View {
                 folderContextMenu(for: folder)
             }
         }
-        .selectionOverlay(isSelected: viewModel.selectedFolders.contains(folder), isEditing: viewModel.isEditing)
     }
     
     private func fileRow(for fileMetadata: FileMetadata) -> some View {
@@ -704,9 +710,16 @@ struct CardDetailView: View {
             
             Spacer()
             
+            // NOTE: Order swapped to make selection indicator appear at trailing edge.
+            // When editing, the favorite icon moves to the left of the selection indicator.
             if fileMetadata.isFavorite {
                 Image(systemName: "heart.fill")
                     .foregroundColor(.red)
+            }
+            
+            if viewModel.isEditing {
+                listSelectionIcon(isSelected: viewModel.selectedFileMetadata.contains(fileMetadata))
+                    .padding(.leading, 8) // Ensure separation from heart or content
             }
         }
         .padding(.vertical, 8)
@@ -719,7 +732,6 @@ struct CardDetailView: View {
                 fileMetadataContextMenu(for: fileMetadata)
             }
         }
-        .selectionOverlay(isSelected: viewModel.selectedFileMetadata.contains(fileMetadata), isEditing: viewModel.isEditing)
     }
 
     @ViewBuilder
@@ -728,6 +740,21 @@ struct CardDetailView: View {
             // Updated to use AsyncThumbnailView for list as well, PASSING VIEWMODEL
             AsyncThumbnailView(fileMetadata: fileMetadata, size: 44, viewModel: viewModel)
         }
+    }
+    
+    // Helper function for selection icon in list view
+    private func listSelectionIcon(isSelected: Bool) -> some View {
+        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+            .resizable()
+            .scaledToFit()
+            .frame(width: 24, height: 24)
+            .foregroundStyle(isSelected ? Color.blue : Color.gray)
+            .background(
+                Circle()
+                    .fill(Color.white)
+                    .padding(1)
+            )
+            .transition(.opacity)
     }
 
     private func folderView(for folder: Folder) -> some View {
@@ -750,6 +777,8 @@ struct CardDetailView: View {
                         .padding(4)
                 }
             }
+            // CHANGED: Applied selectionOverlay directly to the icon container for center alignment on thumbnail
+            .selectionOverlay(isSelected: viewModel.selectedFolders.contains(folder), isEditing: viewModel.isEditing)
             
             Text(folder.name)
                 .font(.caption)
@@ -766,7 +795,6 @@ struct CardDetailView: View {
                 folderContextMenu(for: folder)
             }
         }
-        .selectionOverlay(isSelected: viewModel.selectedFolders.contains(folder), isEditing: viewModel.isEditing)
     }
     
     private func fileMetadataView(for fileMetadata: FileMetadata) -> some View {
@@ -788,6 +816,11 @@ struct CardDetailView: View {
                 }
             }
             .frame(width: tileSize, height: tileSize)
+            // CHANGED: Applied selectionOverlay directly to the thumbnail container for center alignment on thumbnail
+            .selectionOverlay(
+                isSelected: viewModel.selectedFileMetadata.contains(fileMetadata),
+                isEditing: viewModel.isEditing
+            )
             
             // Show file name ONLY if it's not an image with a placeholder name.
             if fileMetadata.fileType != .image || !isPlaceholderImageName(fileMetadata.fileName) {
@@ -807,10 +840,6 @@ struct CardDetailView: View {
                 fileMetadataContextMenu(for: fileMetadata)
             }
         }
-        .selectionOverlay(
-            isSelected: viewModel.selectedFileMetadata.contains(fileMetadata),
-            isEditing: viewModel.isEditing
-        )
     }
     
     // --- Tap Handler ---
@@ -1115,7 +1144,7 @@ struct SubjectNoteSheetView: View {
     @Binding var noteText: String
     @Environment(\.dismiss) private var dismiss
     
-    private let placeholder = "Write important topics for exam"
+    private let placeholder = "Write important topics for exam or paste Drive Links"
     
     var body: some View {
         NavigationView {
