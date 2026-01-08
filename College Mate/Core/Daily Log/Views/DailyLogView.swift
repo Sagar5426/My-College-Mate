@@ -59,7 +59,7 @@ struct DailyLogView: View {
                         
                     } header: {
                         GeometryReader { proxy in
-                            HeaderView(size: proxy.size, title: "Attendance 🙋", isShowingProfileView: $viewModel.isShowingProfileView)
+                            HeaderView(size: proxy.size, title: "Attendance", icon: .asset("student_hat", size: 28), isShowingProfileView: $viewModel.isShowingProfileView)
                         }
                         .frame(height: 50)
                     }

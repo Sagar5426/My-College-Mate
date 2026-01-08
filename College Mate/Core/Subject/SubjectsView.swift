@@ -20,7 +20,8 @@ struct SubjectsView: View {
                                 GeometryReader { proxy in
                         HeaderView(
                             size: proxy.size,
-                            title: "My Subjects 📚",
+                            title: "My Subjects",
+                            icon: .asset("books_icon", size: 30),
                             isShowingProfileView: $isShowingProfileView
                         )
                     }

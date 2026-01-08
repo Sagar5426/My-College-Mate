@@ -7,11 +7,11 @@
 
 import SwiftUI
 
-// MARK: - Header Icon Type
+// MARK: - Header Icon Type (UPGRADED ✅)
 enum HeaderIcon {
     case emoji(String)
-    case asset(String)     // SVG / PDF from Assets
-    case system(String)    // SF Symbols
+    case asset(String, size: CGFloat)
+    case system(String, size: CGFloat)
 }
 
 extension View {
@@ -69,7 +69,7 @@ extension View {
         }
     }
 
-    // MARK: - NEW Header View (Icon Support)
+    // MARK: - Header View with Icon (SIZE CONTROLLABLE ✅)
     @ViewBuilder
     func HeaderView(
         size: CGSize,
@@ -99,7 +99,7 @@ extension View {
         }
     }
 
-    // MARK: - Header Icon Renderer
+    // MARK: - Header Icon Renderer (UPGRADED ✅)
     @ViewBuilder
     private func headerIconView(_ icon: HeaderIcon) -> some View {
         switch icon {
@@ -107,20 +107,19 @@ extension View {
         case .emoji(let value):
             Text(value)
 
-        case .asset(let name):
-            let image = Image(name)
-            image
+        case .asset(let name, let size):
+            Image(name)
                 .resizable()
                 .scaledToFit()
-                .frame(width: 28, height: 28)
-                .foregroundColor(.blue)
+                .frame(width: size, height: size)
+                .offset(y: -1) // better text alignment
 
-        case .system(let name):
+        case .system(let name, let size):
             Image(systemName: name)
-                .font(.title2)
+                .font(.system(size: size, weight: .medium))
+                .offset(y: -1)
         }
     }
-
 
     // MARK: - Profile Icon
     @ViewBuilder

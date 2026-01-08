@@ -83,7 +83,7 @@ struct TimeTableView: View {
                             }
                         }
                     } header: {
-                        HeaderView(size: .zero, title: "Time Table",icon: .asset("timetable_icon"), isShowingProfileView: $isShowingProfileView)
+                        HeaderView(size: .zero, title: "Time Table",icon: .asset("timetable_icon", size: 28), isShowingProfileView: $isShowingProfileView)
                             .frame(height: 60)
                     }
                 }
