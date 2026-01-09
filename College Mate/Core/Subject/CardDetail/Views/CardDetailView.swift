@@ -320,114 +320,126 @@ struct CardDetailView: View {
     }
     
     private var filterView: some View {
-        
-        VStack(alignment: .leading, spacing: gridSpacing) {
-            HStack(spacing: gridSpacing) {
-                Menu {
-                    Picker("Filter", selection: $viewModel.selectedFilter) {
-                        ForEach(NoteFilter.allCases, id: \.self) { filter in
-                            Text(filter.rawValue).tag(filter)
+            VStack(alignment: .leading, spacing: gridSpacing) {
+                HStack(spacing: gridSpacing) {
+                    // MARK: - Filter Menu
+                    Menu {
+                        Picker("Filter", selection: $viewModel.selectedFilter) {
+                            ForEach(NoteFilter.allCases, id: \.self) { filter in
+                                Text(filter.rawValue).tag(filter)
+                            }
+                        }
+
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "line.3.horizontal.decrease")
+                                .font(.body)
+                            
+                            // FIX APPLIED HERE:
+                            // Use a ZStack with a hidden "Favorites" text (the longest option)
+                            // to reserve fixed space and prevent layout jitter when selection changes.
+                            ZStack(alignment: .leading) {
+                                Text(NoteFilter.favorites.rawValue)
+                                    .font(.subheadline)
+                                    .hidden() // Invisible, strictly for layout sizing
+                                
+                                Text(viewModel.selectedFilter.rawValue)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.primary)
+                            }
                         }
                     }
-
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "line.3.horizontal.decrease")
-                            .font(.body)
-                        Text(viewModel.selectedFilter.rawValue)
-                            .font(.subheadline)
-                            .foregroundStyle(.primary)
-                    }
-                }
-                .onTapGesture {
-                    playHaptic(style: .light)
-                }
-                
-                Spacer()
-                
-                // ADDED: Button to open the note sheet
-                Button {
-                    playHaptic(style: .light)
-                    viewModel.isShowingNoteSheet = true
-                } label: {
-                    Image(systemName: "list.clipboard")
-                        .font(.body)
-                        .foregroundStyle(.primary)
-                        .frame(minWidth: 22, alignment: .center)
-                }
-                
-                Menu {
-                    // Only show Select Items if not already editing
-                    if !viewModel.isEditing && (!viewModel.filteredFileMetadata.isEmpty || !viewModel.subfolders.isEmpty) {
-                         Button {
-                             playHaptic(style: .light)
-                             // CHANGED: Use spring animation when entering edit mode
-                             withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                                 viewModel.toggleEditMode()
-                             }
-                         } label: {
-                             Label("Select Items", systemImage: "checkmark.circle")
-                         }
-                         Divider()
+                    .onTapGesture {
+                        playHaptic(style: .light)
                     }
                     
-                    // Sorting Options
-                    Button(action: {
+                    Spacer()
+                    
+                    // Note Button
+                    Button {
                         playHaptic(style: .light)
-                        viewModel.selectSortOption(.date)
-                    }) {
-                          HStack {
-                              Text(CardDetailViewModel.SortType.date.rawValue)
-                              Spacer()
-                              if viewModel.sortType == .date {
-                                  Image(systemName: viewModel.sortAscending ? "chevron.up" : "chevron.down")
-                              }
-                          }
+                        viewModel.isShowingNoteSheet = true
+                    } label: {
+                        Image(systemName: "list.clipboard")
+                            .font(.body)
+                            .foregroundStyle(.primary)
+                            .frame(minWidth: 22, alignment: .center)
                     }
-                   Button(action: {
-                       playHaptic(style: .light)
-                       viewModel.selectSortOption(.name)
-                   }) {
-                       HStack {
-                           Text(CardDetailViewModel.SortType.name.rawValue)
-                           Spacer()
-                           if viewModel.sortType == .name {
-                               Image(systemName: viewModel.sortAscending ? "chevron.up" : "chevron.down")
+                    
+                    // MARK: - Sort & Layout Menu
+                    Menu {
+                        // Only show Select Items if not already editing
+                        if !viewModel.isEditing && (!viewModel.filteredFileMetadata.isEmpty || !viewModel.subfolders.isEmpty) {
+                             Button {
+                                 playHaptic(style: .light)
+                                 withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                                     viewModel.toggleEditMode()
+                                 }
+                             } label: {
+                                 Label("Select Items", systemImage: "checkmark.circle")
+                             }
+                             Divider()
+                        }
+                        
+                        // Sorting Options
+                        Button(action: {
+                            playHaptic(style: .light)
+                            viewModel.selectSortOption(.date)
+                        }) {
+                              HStack {
+                                  Text(CardDetailViewModel.SortType.date.rawValue)
+                                  Spacer()
+                                  if viewModel.sortType == .date {
+                                      Image(systemName: viewModel.sortAscending ? "chevron.up" : "chevron.down")
+                                  }
+                              }
+                        }
+                       Button(action: {
+                           playHaptic(style: .light)
+                           viewModel.selectSortOption(.name)
+                       }) {
+                           HStack {
+                               Text(CardDetailViewModel.SortType.name.rawValue)
+                               Spacer()
+                               if viewModel.sortType == .name {
+                                   Image(systemName: viewModel.sortAscending ? "chevron.up" : "chevron.down")
+                               }
                            }
                        }
-                   }
-                   
-                    Divider()
+                       
+                        Divider()
 
-                    // Layout Picker
-                    Picker("Layout", selection: $viewModel.layoutStyle) {
-                        Label("Grid", systemImage: "square.grid.2x2")
+                        // Layout Picker
+                        Picker("Layout", selection: $viewModel.layoutStyle) {
+                            Label("Grid", systemImage: "square.grid.2x2")
+                                .font(.body)
+                                .tag(CardDetailViewModel.LayoutStyle.grid)
+                            Label("List", systemImage: "list.bullet")
+                                .font(.body)
+                                .tag(CardDetailViewModel.LayoutStyle.list)
+                        }
+                        .pickerStyle(.inline)
+                        .onChange(of: viewModel.layoutStyle) {
+                            playHaptic(style: .light)
+                        }
+                        
+                    } label: {
+                        Image(systemName: viewModel.layoutStyle.rawValue == "Grid" ? "square.grid.2x2" : "list.bullet")
                             .font(.body)
-                            .tag(CardDetailViewModel.LayoutStyle.grid)
-                        Label("List", systemImage: "list.bullet")
-                            .font(.body)
-                            .tag(CardDetailViewModel.LayoutStyle.list)
+                            // FIX APPLIED HERE:
+                            // Changed minWidth to a fixed width (24) to prevent jitter if icons differ slightly in width.
+                            .frame(width: 24, alignment: .center)
                     }
-                    .pickerStyle(.inline)
-                    .onChange(of: viewModel.layoutStyle) {
+                    .onTapGesture {
                         playHaptic(style: .light)
                     }
-                    
-                } label: {
-                    Image(systemName: viewModel.layoutStyle.rawValue == "Grid" ? "square.grid.2x2" : "list.bullet")
-                        .font(.body) // Standardized font
-                        .frame(minWidth: 22, alignment: .center) // Standardized frame
-                }
-                .onTapGesture {
-                    playHaptic(style: .light)
-                }
 
+                }
+                
             }
-            
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding()
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding()
-    }
 
     
     private var breadcrumbView: some View {
