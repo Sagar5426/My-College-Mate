@@ -82,7 +82,7 @@ struct EditSubjectView: View {
         var errors: [String] = []
         
         // 1. Validate Name
-        let trimmedName = subject.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedName = subject.name.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
         if trimmedName.isEmpty {
             errors.append("• Subject Name is required.")
         }
@@ -92,7 +92,8 @@ struct EditSubjectView: View {
             let lowercasedNew = trimmedName.lowercased()
             let hasDuplicate = subjects.contains { other in
                 if other.persistentModelID == subject.persistentModelID { return false }
-                return other.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == lowercasedNew
+                // Explicit CharacterSet fixes the inference error
+                return other.name.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).lowercased() == lowercasedNew
             }
             if hasDuplicate {
                 errors.append("• A subject with this name already exists.")
@@ -109,7 +110,7 @@ struct EditSubjectView: View {
             if let times = classTimes[day] {
                 for (index, time) in times.enumerated() {
                     // Room Validation
-                    if time.roomNumber.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    if time.roomNumber.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).isEmpty {
                         errors.append("• Room number missing for \(day) (Class \(index + 1)).")
                     }
                     
@@ -142,7 +143,6 @@ struct EditSubjectView: View {
         let nameChanged = newName.lowercased() != originalSubjectName.lowercased()
         
         // 1. If name changed, move files FIRST before saving the new name to the model permanently
-        // (Although Bindable updates it live, we use the original capture for the old path)
         if nameChanged {
             moveFilesToNewFolder(oldName: originalSubjectName, newName: newName)
         }
@@ -158,7 +158,9 @@ struct EditSubjectView: View {
         for schedule in (subject.schedules ?? []) {
             selectedDays.insert(schedule.day)
             classTimes[schedule.day] = (schedule.classTimes ?? []).map { classTime in
+                // Uses the shared struct from ClassTime.swift which now supports ID
                 ClassPeriodTime(
+                    id: classTime.id,
                     startTime: classTime.startTime,
                     endTime: classTime.endTime,
                     roomNumber: classTime.roomNumber
@@ -169,24 +171,78 @@ struct EditSubjectView: View {
     }
     
     private func saveUpdatedData() {
-        // Reconstruct schedules from the view state
-        subject.schedules = selectedDays.map { day in
-            let schedule = Schedule(day: day)
-            schedule.classTimes = classTimes[day]?.map { classPeriodTime in
-                ClassTime(
-                    startTime: classPeriodTime.startTime,
-                    endTime: classPeriodTime.endTime,
-                    date: Date(),
-                    roomNumber: classPeriodTime.roomNumber
-                )
-            } ?? []
-            return schedule
+        // We do NOT completely replace subject.schedules.
+        // We selectively update, add, or remove to preserve IDs.
+        
+        // 1. Remove schedules for days that are no longer selected
+        if let existingSchedules = subject.schedules {
+            for i in stride(from: existingSchedules.count - 1, through: 0, by: -1) {
+                let schedule = existingSchedules[i]
+                if !selectedDays.contains(schedule.day) {
+                    modelContext.delete(schedule)
+                }
+            }
+        }
+        
+        // 2. Update or Create schedules for selected days
+        for day in selectedDays {
+            // Find existing schedule for this day or create new
+            let schedule: Schedule
+            if let existing = (subject.schedules ?? []).first(where: { $0.day == day }) {
+                schedule = existing
+            } else {
+                schedule = Schedule(day: day)
+                subject.schedules?.append(schedule)
+            }
+            
+            // Get the new configuration from UI
+            let uiTimes = classTimes[day] ?? []
+            
+            // Prepare the new list of ClassTimes
+            var updatedClassTimes: [ClassTime] = []
+            
+            for uiTime in uiTimes {
+                // Check if we can reuse an existing ClassTime
+                // We reuse it IF:
+                // 1. We have an ID
+                // 2. The start and end times match (User requested reset if time changes)
+                
+                if let id = uiTime.id,
+                   let existingClassTime = (schedule.classTimes ?? []).first(where: { $0.id == id }),
+                   areDatesEqual(d1: existingClassTime.startTime, d2: uiTime.startTime),
+                   areDatesEqual(d1: existingClassTime.endTime, d2: uiTime.endTime) {
+                    
+                    // SAME CLASS: Update details (Room), keep ID (Attendance Preserved)
+                    existingClassTime.roomNumber = uiTime.roomNumber
+                    updatedClassTimes.append(existingClassTime)
+                    
+                } else {
+                    // CHANGED CLASS or NEW CLASS: Create new (New ID = Reset Attendance)
+                    let newClassTime = ClassTime(
+                        startTime: uiTime.startTime,
+                        endTime: uiTime.endTime,
+                        date: Date(),
+                        roomNumber: uiTime.roomNumber
+                    )
+                    updatedClassTimes.append(newClassTime)
+                }
+            }
+            
+            // Update the schedule's class list
+            schedule.classTimes = updatedClassTimes
         }
         
         let subjectToSchedule = subject
         Task {
             await NotificationManager.shared.scheduleNotifications(for: subjectToSchedule)
         }
+    }
+    
+    // Helper to compare times ignoring milliseconds/seconds drift if necessary
+    private func areDatesEqual(d1: Date?, d2: Date?) -> Bool {
+        guard let d1 = d1, let d2 = d2 else { return false }
+        // Simple equality check
+        return d1 == d2
     }
 }
 

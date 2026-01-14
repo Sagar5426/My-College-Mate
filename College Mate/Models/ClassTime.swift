@@ -23,8 +23,11 @@ class ClassTime {
     init() {}
 }
 
-// Define a custom struct for class times
+// MARK: - Shared Helper Struct
+// Updated to include ID for editing support.
+// Defaulting to nil ensures AddSubjectView (which doesn't use ID) still works.
 struct ClassPeriodTime: Hashable {
+    var id: UUID? = nil
     var startTime: Date?
     var endTime: Date?
     var roomNumber: String = ""
