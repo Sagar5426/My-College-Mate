@@ -147,9 +147,14 @@ class DailyLogViewModel: ObservableObject {
         let dayOfWeek = selectedDate.formatted(Date.FormatStyle().weekday(.wide))
         var items: [DailyClassItem] = []
         
+        // FIX: Normalize both dates to Start of Day to ignore time components
+        let calendar = Calendar.current
+        let startOfSelectedDate = calendar.startOfDay(for: selectedDate)
+        
         // 1. Filter Subjects relevant to today
         let todaySubjects = allSubjects.filter { subject in
-            selectedDate >= subject.startDateOfSubject
+            let startOfSubjectDate = calendar.startOfDay(for: subject.startDateOfSubject)
+            return startOfSelectedDate >= startOfSubjectDate
         }
         
         // 2. Flatten Schedules

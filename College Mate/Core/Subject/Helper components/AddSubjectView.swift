@@ -123,7 +123,7 @@ struct AddSubjectView: View {
     
     private func saveSubject(normalizedName: String) {
         let newSubject = Subject(name: normalizedName)
-        newSubject.startDateOfSubject = startDateOfSubject
+        newSubject.startDateOfSubject = Calendar.current.startOfDay(for: startDateOfSubject)
         
         // 1. Initialize optional Attendance
         let newAttendance = Attendance()

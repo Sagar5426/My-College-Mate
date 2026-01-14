@@ -268,7 +268,7 @@ struct ClassesList: View {
     }
 }
 
-// MARK: - Class Attendance Row (Unchanged)
+// MARK: - Class Attendance Row (Updated)
 struct ClassAttendanceRow: View {
     let subject: Subject
     let classTime: ClassTime
@@ -281,8 +281,19 @@ struct ClassAttendanceRow: View {
         subject.attendance?.percentage ?? 0.0
     }
     
-    private var isAboveThreshold: Bool {
-        percentage >= (subject.attendance?.minimumPercentageRequirement ?? 75.0)
+    // Updated Logic: Matches TimeTableView/SubjectCardView color thresholds
+    private var attendanceColor: Color {
+        guard let attendance = subject.attendance else { return .gray }
+        let currentPercentage = attendance.percentage
+        let minRequirement = attendance.minimumPercentageRequirement
+        
+        if currentPercentage >= minRequirement {
+            return .green
+        } else if currentPercentage <= (0.5 * minRequirement) {
+            return .red
+        } else {
+            return .yellow
+        }
     }
     
     var body: some View {
@@ -304,8 +315,9 @@ struct ClassAttendanceRow: View {
                         Text("Room: \(classTime.roomNumber)")
                     }
                     
-                    Text("Attendance: \(Int(percentage))%")
-                        .foregroundColor(isAboveThreshold ? .green : .red)
+                    // Updated Display: Rounds to nearest Int and clamps to 100%
+                    Text("Attendance: \(Int(min(percentage, 100.0).rounded()))%")
+                        .foregroundColor(attendanceColor)
                         .padding(.top, 2)
                 }
                 .font(.caption)
@@ -322,7 +334,7 @@ struct ClassAttendanceRow: View {
                 Button("Not Attended") {
                     updateStatus(to: "Not Attended")
                 }
-                Button("Select") { // Changed from "Canceled" to "Select"
+                Button("Select") {
                     updateStatus(to: "Canceled")
                 }
             } label: {
