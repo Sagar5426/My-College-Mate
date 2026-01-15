@@ -75,6 +75,7 @@
 				Models/Note.swift,
 				Models/Schedule.swift,
 				Models/Subject.swift,
+				Models/TopicItem.swift,
 				Services/AppDelegate.swift,
 				Services/AuthenticationService.swift,
 				Services/FilesDataService.swift,

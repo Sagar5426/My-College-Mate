@@ -7,8 +7,9 @@ class Subject {
     var name: String = ""
     var startDateOfSubject: Date = Date()
     var logs: [AttendanceLogEntry] = []
-    var ImportantTopicsNote: String = ""
-
+    
+    // MARK: - Relationships
+    
     @Relationship(deleteRule: .cascade, inverse: \Schedule.subject)
     var schedules: [Schedule]?
     
@@ -26,6 +27,10 @@ class Subject {
     
     @Relationship(deleteRule: .cascade, inverse: \FileMetadata.subject)
     var fileMetadata: [FileMetadata]?
+    
+    // REPLACED: ImportantTopicsNote string with a list of TopicItems
+    @Relationship(deleteRule: .cascade, inverse: \TopicItem.subject)
+    var topics: [TopicItem]? = []
 
     init(name: String, startDateOfSubject: Date = .now, schedules: [Schedule]? = [], attendance: Attendance? = Attendance(totalClasses: 0, attendedClasses: 0), notes: [Note]? = []) {
         self.id = UUID()

@@ -5,8 +5,6 @@ import QuickLook
 import PhotosUI
 
 // MARK: - Thread-Safe Cache Wrapper
-// NSCache is thread-safe by design, but not marked Sendable in Swift 6 yet.
-// We use @unchecked Sendable to suppress the compiler error safely.
 final class ImageCache: @unchecked Sendable {
     private let cache = NSCache<NSString, UIImage>()
     
@@ -36,48 +34,8 @@ class CardDetailViewModel: ObservableObject {
     
     // MARK: - Properties
     
-    // MARK: - Caching
-    // FIX: Use the Sendable wrapper 'ImageCache'.
-    // 'nonisolated' allows this to be accessed safely from background threads.
     nonisolated private let thumbnailCache = ImageCache()
-    
     private let layoutStyleKey: String
-    
-    func beginRenaming(with metadata: FileMetadata) {
-        guard let url = metadata.getFileURL(),
-              FileManager.default.fileExists(atPath: url.path) else {
-            if metadata.fileType == .image {
-                self.renamingFileMetadata = metadata
-                self.newFileName = self.suggestedEditableName(from: metadata.fileName)
-                self.isShowingRenameView = true
-            } else {
-                print("Error: Cannot rename file that is not downloaded.")
-                return
-            }
-            return
-        }
-        
-        self.renamingFileMetadata = metadata
-        self.newFileName = self.suggestedEditableName(from: metadata.fileName)
-        self.isShowingRenameView = true
-    }
-    
-    // Returns an empty string for auto-generated image names like "image_<UUID>", otherwise returns the base name without extension.
-    private func suggestedEditableName(from fileName: String) -> String {
-        let base = (fileName as NSString).deletingPathExtension
-        let lower = base.lowercased()
-        // Accept both image_ and image- prefixes
-        if lower.hasPrefix("image_") || lower.hasPrefix("image-") {
-            let dropCount = lower.hasPrefix("image_") ? 6 : 6 // length of "image_" or "image-"
-            let uuidPart = String(lower.dropFirst(dropCount))
-            let components = uuidPart.split(separator: "-")
-            let expected = [8, 4, 4, 4, 12]
-            if components.count == expected.count && zip(components, expected).allSatisfy({ $0.count == $1 }) {
-                return ""
-            }
-        }
-        return base
-    }
     
     let subject: Subject
     let modelContext: ModelContext
@@ -89,17 +47,16 @@ class CardDetailViewModel: ObservableObject {
         }
     }
     @Published var sortType: SortType = .date
-    @Published var sortAscending: Bool = false // false for newest first/A-Z
+    @Published var sortAscending: Bool = false
     
-    // ADDED: State for the note sheet
+    // Controls sheet visibility
     @Published var isShowingNoteSheet = false
-    @Published var subjectNote: String = ""
     
     // --- Folder-based State ---
     @Published var currentFolder: Folder? = nil
-    @Published var folderPath: [Folder] = [] // Breadcrumb navigation
+    @Published var folderPath: [Folder] = []
     @Published var currentFiles: [FileMetadata] = []
-    @Published var originalSubfolders: [Folder] = [] // Store the unfiltered subfolders
+    @Published var originalSubfolders: [Folder] = []
     @Published var filteredFileMetadata: [FileMetadata] = []
     @Published var subfolders: [Folder] = []
     
@@ -108,15 +65,12 @@ class CardDetailViewModel: ObservableObject {
     @Published var isShowingFileImporter = false
     @Published var isImportingFile = false
     @Published var isShowingPhotoPicker = false
-    // Dedicated flag for rename/caption UI
     @Published var isShowingRenameView = false
     
     // --- Single Item Delete State ---
     @Published var itemToDelete: AnyHashable? = nil
     @Published var isShowingSingleDeleteAlert = false {
         didSet {
-            // When the alert is dismissed (either by confirm or cancel),
-            // reset the itemToDelete.
             if !isShowingSingleDeleteAlert {
                 itemToDelete = nil
             }
@@ -150,26 +104,17 @@ class CardDetailViewModel: ObservableObject {
         }
     }
     
-    // --- Universal Preview State ---
     @Published var documentToPreview: PreviewableDocument? = nil
-    
     @Published var selectedFilter: NoteFilter = .all
     
-    // --- Renaming State ---
     @Published var renamingFileMetadata: FileMetadata? = nil {
         didSet {
-            if renamingFileMetadata != nil {
-                // This logic is now handled by beginRenaming()
-                // We keep the isShowingRenameView = true
-                // in case it's set programmatically
-                if !isShowingRenameView {
-                    isShowingRenameView = true
-                }
+            if renamingFileMetadata != nil && !isShowingRenameView {
+                isShowingRenameView = true
             }
         }
     }
     
-    // --- ADDED: iCloud Download State ---
     @Published var isDownloading: Bool = false
     @Published var fileToDownload: FileMetadata? = nil
     
@@ -185,27 +130,21 @@ class CardDetailViewModel: ObservableObject {
     }
     @Published var newFileName: String = ""
     
-    // --- Selection State for Multi-Select ---
     @Published var isEditing = false
     @Published var selectedFileMetadata: Set<FileMetadata> = []
     @Published var selectedFolders: Set<Folder> = []
     @Published var isShowingMultiDeleteAlert = false
     
-    // ADDED: Computed property to get total selected item count
     var selectedItemCount: Int {
         selectedFileMetadata.count + selectedFolders.count
     }
     
-    // Computed property to disable the move button
     var isMoveButtonDisabled: Bool {
-        // Disable if any folder is selected OR if no files are selected.
         return !selectedFolders.isEmpty || selectedFileMetadata.isEmpty
     }
     
-    // --- Multi-Sharing State ---
     @Published var urlsToShare: [URL] = []
     @Published var isShowingMultiShareSheet = false
-    
     
     // MARK: - Initializer
     
@@ -214,51 +153,67 @@ class CardDetailViewModel: ObservableObject {
         self.modelContext = modelContext
         self.layoutStyleKey = "CardDetailView_LayoutStyle_\(subject.id.uuidString)"
         
-        // Load saved layout style
         if let savedLayoutRawValue = UserDefaults.standard.string(forKey: layoutStyleKey),
            let savedLayout = LayoutStyle(rawValue: savedLayoutRawValue) {
             self.layoutStyle = savedLayout
         } else {
-            self.layoutStyle = .grid // Default
+            self.layoutStyle = .grid
         }
         
         FileDataService.migrateExistingFiles(for: subject, modelContext: modelContext)
         loadFolderContent()
         
-        // ADDED: Load the saved note
-        self.subjectNote = subject.ImportantTopicsNote
-        
-        // Ensure optional arrays are initialized
-        if subject.rootFolders == nil {
-            subject.rootFolders = []
-        }
-        if subject.fileMetadata == nil {
-            subject.fileMetadata = []
-        }
+        if subject.rootFolders == nil { subject.rootFolders = [] }
+        if subject.fileMetadata == nil { subject.fileMetadata = [] }
+        // Initialize topics if nil
+        if subject.topics == nil { subject.topics = [] }
     }
     
-    // MARK: - Sorting Method
+    // MARK: - Helper Methods
+    
+    func beginRenaming(with metadata: FileMetadata) {
+        guard let url = metadata.getFileURL(),
+              FileManager.default.fileExists(atPath: url.path) else {
+            if metadata.fileType == .image {
+                self.renamingFileMetadata = metadata
+                self.newFileName = self.suggestedEditableName(from: metadata.fileName)
+                self.isShowingRenameView = true
+            } else {
+                print("Error: Cannot rename file that is not downloaded.")
+                return
+            }
+            return
+        }
+        
+        self.renamingFileMetadata = metadata
+        self.newFileName = self.suggestedEditableName(from: metadata.fileName)
+        self.isShowingRenameView = true
+    }
+    
+    private func suggestedEditableName(from fileName: String) -> String {
+        let base = (fileName as NSString).deletingPathExtension
+        let lower = base.lowercased()
+        if lower.hasPrefix("image_") || lower.hasPrefix("image-") {
+            let dropCount = lower.hasPrefix("image_") ? 6 : 6
+            let uuidPart = String(lower.dropFirst(dropCount))
+            let components = uuidPart.split(separator: "-")
+            let expected = [8, 4, 4, 4, 12]
+            if components.count == expected.count && zip(components, expected).allSatisfy({ $0.count == $1 }) {
+                return ""
+            }
+        }
+        return base
+    }
+
     func selectSortOption(_ newSortType: SortType) {
         if sortType == newSortType {
             sortAscending.toggle()
         } else {
             sortType = newSortType
-            sortAscending = false // Default to descending for date, ascending for name
+            sortAscending = false
         }
         loadFolderContent()
-        performSearch() // Re-apply search with new sort
-    }
-
-    // ADDED: Function to save the note
-    // MARK: - Subject Note
-    
-    func saveSubjectNote() {
-        subject.ImportantTopicsNote = subjectNote
-        do {
-            try modelContext.save()
-        } catch {
-            print("Failed to save subject note: \(error)")
-        }
+        performSearch()
     }
 
     // MARK: - Folder-based Methods
@@ -275,7 +230,6 @@ class CardDetailViewModel: ObservableObject {
             baseFiles = (subject.fileMetadata ?? []).filter { $0.folder == nil }
         }
 
-        // Apply sorting and store original list of folders
         self.originalSubfolders = sortFolders(baseSubfolders)
         self.subfolders = self.originalSubfolders
         currentFiles = sortFiles(baseFiles)
@@ -283,7 +237,6 @@ class CardDetailViewModel: ObservableObject {
         filterFileMetadata()
     }
     
-    // Helper to sort folders
     private func sortFolders(_ folders: [Folder]) -> [Folder] {
         return folders.sorted {
             let name1 = $0.name.lowercased()
@@ -292,7 +245,6 @@ class CardDetailViewModel: ObservableObject {
         }
     }
     
-    // Helper to sort files
     private func sortFiles(_ files: [FileMetadata]) -> [FileMetadata] {
         return files.sorted {
             switch sortType {
@@ -311,8 +263,6 @@ class CardDetailViewModel: ObservableObject {
     func filterFileMetadata() {
         let showSearchAtRoot = isSearching && currentFolder == nil
         let filesToFilter = showSearchAtRoot ? searchResults : currentFiles
-        
-        // Always start with the original, unfiltered list of folders
         let foldersToFilter: [Folder] = showSearchAtRoot ? searchFolderResults : self.originalSubfolders
 
         switch selectedFilter {
@@ -340,14 +290,12 @@ class CardDetailViewModel: ObservableObject {
                 let allFolders = allFoldersRecursively(from: (subject.rootFolders ?? []))
                 subfolders = sortFolders(allFolders.filter { $0.isFavorite })
             } else {
-                // When in a folder, just filter the current content
                 filteredFileMetadata = filesToFilter.filter { $0.isFavorite }
                 subfolders = foldersToFilter.filter { $0.isFavorite }
             }
         }
     }
     
-    // Recursively collect all folders starting from a list of folders
     private func allFoldersRecursively(from folders: [Folder]) -> [Folder] {
         var result: [Folder] = []
         for folder in folders {
@@ -363,12 +311,8 @@ class CardDetailViewModel: ObservableObject {
     // MARK: - Navigation Methods
     
     func navigateToFolder(_ folder: Folder) {
-        if folder.subfolders == nil {
-            folder.subfolders = []
-        }
-        if folder.files == nil {
-            folder.files = []
-        }
+        if folder.subfolders == nil { folder.subfolders = [] }
+        if folder.files == nil { folder.files = [] }
         folderPath.append(folder)
         currentFolder = folder
         loadFolderContent()
@@ -421,20 +365,17 @@ class CardDetailViewModel: ObservableObject {
     func toggleFavorite(for fileMetadata: FileMetadata) {
         fileMetadata.isFavorite.toggle()
         try? modelContext.save()
-        loadFolderContent() // Refresh to show favorite status change
+        loadFolderContent()
     }
     
-    // --- UPDATED: Delete function ---
     func deleteFileMetadata(_ fileMetadata: FileMetadata) {
         guard let fileURL = fileMetadata.getFileURL() else {
-            // Failsafe: if we can't get a URL, just delete the metadata
             modelContext.delete(fileMetadata)
             try? modelContext.save()
             loadFolderContent()
             return
         }
 
-        // Check if the file exists locally
         if FileManager.default.fileExists(atPath: fileURL.path) {
             do {
                 try FileManager.default.removeItem(at: fileURL)
@@ -442,17 +383,13 @@ class CardDetailViewModel: ObservableObject {
                 print("Failed to delete physical file: \(error)")
                 return
             }
-        } else {
-            print("File not found locally. Deleting metadata for: \(fileMetadata.fileName)")
         }
         
-        // Delete the metadata object from SwiftData
         modelContext.delete(fileMetadata)
         try? modelContext.save()
         loadFolderContent()
     }
     
-    // --- UPDATED: Rename function ---
     func renameFileMetadata(_ fileMetadata: FileMetadata, to newName: String) {
         guard let oldURL = fileMetadata.getFileURL() else { return }
         
@@ -460,20 +397,15 @@ class CardDetailViewModel: ObservableObject {
         let newFileName = "\(newName).\(fileExtension)"
         let newURL = oldURL.deletingLastPathComponent().appendingPathComponent(newFileName)
         
-        // Check if the file exists locally
         if FileManager.default.fileExists(atPath: oldURL.path) {
-            // File exists, rename it
             do {
                 try FileManager.default.moveItem(at: oldURL, to: newURL)
             } catch {
                 print("Failed to rename physical file: \(error)")
                 return
             }
-        } else {
-            print("File not found locally. Updating metadata name for: \(fileMetadata.fileName)")
         }
 
-        // Update metadata
         fileMetadata.fileName = newFileName
         let folderPath = fileMetadata.folder?.fullPath ?? ""
         fileMetadata.relativePath = folderPath.isEmpty ? newFileName : "\(folderPath)/\(newFileName)"
@@ -495,7 +427,6 @@ class CardDetailViewModel: ObservableObject {
         } else if let fileMetadata = itemToDelete as? FileMetadata {
             deleteFileMetadata(fileMetadata)
         }
-        // itemToDelete is reset by the isShowingSingleDeleteAlert.didSet
     }
     
     // MARK: - Search Methods
@@ -510,7 +441,6 @@ class CardDetailViewModel: ObservableObject {
     func performSearch() {
         searchTask?.cancel()
         searchTask = Task {
-            // Debounce
             try? await Task.sleep(nanoseconds: 300_000_000)
             
             let query = searchText.lowercased()
@@ -524,20 +454,14 @@ class CardDetailViewModel: ObservableObject {
                 return
             }
             
-            // FIX: "PersistentModels are not Sendable"
-            // We cannot pass 'subject' or '[FileMetadata]' (SwiftData classes) into a detached task directly.
-            // We must extract Sendable data (PersistentIdentifier + String) first.
-            
             let allFiles = self.subject.fileMetadata ?? []
             let rootFolders = self.subject.rootFolders ?? []
             
-            // Helper struct for transfer (Sendable)
             struct SearchItem: Sendable {
                 let id: PersistentIdentifier
                 let name: String
             }
             
-            // 1. Prepare data on MainActor
             let filesData = allFiles.map { SearchItem(id: $0.persistentModelID, name: $0.fileName) }
             
             var allFoldersData: [SearchItem] = []
@@ -549,20 +473,15 @@ class CardDetailViewModel: ObservableObject {
             }
             collect(from: rootFolders)
             
-            // 2. Run filter in background (Detached Task)
-            // Now we pass only 'filesData' and 'allFoldersData' which are [SearchItem] (Sendable)
             let (filteredFileIDs, filteredFolderIDs) = await Task.detached(priority: .userInitiated) {
                 let fIDs = filesData.filter { $0.name.lowercased().contains(query) }.map { $0.id }
                 let fdIDs = allFoldersData.filter { $0.name.lowercased().contains(query) }.map { $0.id }
                 return (fIDs, fdIDs)
             }.value
             
-            // 3. Resolve back on MainActor
             await MainActor.run {
-                // Re-fetch objects using IDs from the already loaded arrays
                 let filteredFiles = allFiles.filter { filteredFileIDs.contains($0.persistentModelID) }
                 
-                // For folders, we need to find them again recursively to match IDs
                 var allFoldersObjects: [Folder] = []
                 func collectObjects(from folders: [Folder]) {
                     for f in folders {
@@ -586,7 +505,6 @@ class CardDetailViewModel: ObservableObject {
         searchResults.removeAll()
         searchFolderResults.removeAll()
         isSearching = false
-        // When clearing search, restore the view to its non-searching state
         loadFolderContent()
     }
     
@@ -605,7 +523,6 @@ class CardDetailViewModel: ObservableObject {
 
     func moveSelectedFiles(to targetFolder: Folder?) {
         for fileMetadata in selectedFileMetadata {
-            // We need to know the source subject to move correctly
             guard let sourceSubject = fileMetadata.subject else { continue }
             
             if let url = fileMetadata.getFileURL(),
@@ -613,7 +530,6 @@ class CardDetailViewModel: ObservableObject {
             {
                 _ = FileDataService.moveFile(fileMetadata, to: targetFolder, in: sourceSubject)
             } else {
-                // File doesn't exist, just update its metadata parent
                 fileMetadata.folder = targetFolder
                 let folderPath = targetFolder?.fullPath ?? ""
                 fileMetadata.relativePath = folderPath.isEmpty ? fileMetadata.fileName : "\(folderPath)/\(fileMetadata.fileName)"
@@ -632,7 +548,6 @@ class CardDetailViewModel: ObservableObject {
     
     private func loadAvailableFolders() {
         var folders: [Folder] = []
-        // This recursive function fetches all subfolders
         func addFoldersRecursively(from parentFolder: Folder?) {
             let foldersToAdd = (parentFolder?.subfolders ?? subject.rootFolders) ?? []
             for folder in foldersToAdd.sorted(by: { $0.name < $1.name }) {
@@ -660,7 +575,6 @@ class CardDetailViewModel: ObservableObject {
              renameFileMetadata(metadata, to: newFileName)
         }
         
-        // Reset the renaming state
         renamingFileURL = nil
         renamingFileMetadata = nil
         isShowingRenameView = false
@@ -669,10 +583,8 @@ class CardDetailViewModel: ObservableObject {
     // MARK: - File Import Handlers
 
     func handleFileImport(result: Result<[URL], Error>) {
-        // 1. Update UI state immediately (on MainActor)
         isImportingFile = true
         
-        // 2. Pre-calculate Destination Path (on MainActor)
         let destinationDir: URL
         if let currentFolder = currentFolder {
             destinationDir = FileDataService.getFolderURL(for: currentFolder, in: subject)
@@ -680,12 +592,10 @@ class CardDetailViewModel: ObservableObject {
             destinationDir = FileDataService.subjectFolder(for: subject)
         }
         
-        // 3. Launch Detached Task
         Task.detached(priority: .userInitiated) { [weak self] in
             do {
                 let sourceURLs = try result.get()
                 
-                // 4. Background Work: Process Files
                 let importedFiles = await withTaskGroup(of: (String, Int64)?.self) { group in
                     for sourceURL in sourceURLs {
                         group.addTask {
@@ -693,7 +603,6 @@ class CardDetailViewModel: ObservableObject {
                             defer { sourceURL.stopAccessingSecurityScopedResource() }
                             
                             do {
-                                // Create directory safely
                                 try FileManager.default.createDirectory(at: destinationDir, withIntermediateDirectories: true)
                                 
                                 let fileName = sourceURL.lastPathComponent
@@ -720,7 +629,6 @@ class CardDetailViewModel: ObservableObject {
                     return results
                 }
                 
-                // 5. Switch back to MainActor to update State
                 await MainActor.run { [weak self] in
                     guard let self = self else { return }
                     
@@ -760,18 +668,12 @@ class CardDetailViewModel: ObservableObject {
     }
     
     private func handlePhotoPickerSelection() {
-        // 1. Fast fail check
         guard !selectedPhotoItems.isEmpty else { return }
-        
-        // 2. Update UI State immediately on Main Thread
         let items = selectedPhotoItems
         self.selectedPhotoItems = []
         self.isImportingFile = true
         
-        // 3. Run heavy lifting in a Detached Task (Background Thread)
         Task.detached(priority: .userInitiated) { [weak self] in
-            
-            // Use a TaskGroup to process images in PARALLEL
             let readyFiles: [(Data, String)] = await withTaskGroup(of: (Data, String)?.self) { group in
                 for item in items {
                     group.addTask {
@@ -792,7 +694,6 @@ class CardDetailViewModel: ObservableObject {
                 return results
             }
             
-            // 4. Switch back to MainActor for Database & UI Updates
             await MainActor.run { [weak self] in
                 guard let self = self else { return }
                 
@@ -813,8 +714,6 @@ class CardDetailViewModel: ObservableObject {
         }
     }
     
-    // MARK: - Single Image Handlers (Camera)
-    
     func handleImageSelected(_ image: UIImage?) {
         guard let image = image else { return }
         imageToCrop = image
@@ -824,7 +723,6 @@ class CardDetailViewModel: ObservableObject {
     func handleCroppedImage(_ image: UIImage?) {
         guard let image = image else { return }
         
-        // 1. Resolve Path on MainActor
         let destinationDir: URL
         if let currentFolder = currentFolder {
             destinationDir = FileDataService.getFolderURL(for: currentFolder, in: subject)
@@ -832,10 +730,7 @@ class CardDetailViewModel: ObservableObject {
             destinationDir = FileDataService.subjectFolder(for: subject)
         }
         
-        // 2. Launch Detached Task
         Task.detached(priority: .userInitiated) { [weak self] in
-            // 3. Background Work: Compression & Disk I/O
-            // Do NOT use 'self' here.
             guard let imageData = image.jpegData(compressionQuality: 0.8) else { return }
             let fileName = "image_\(UUID().uuidString).jpg"
             let fileURL = destinationDir.appendingPathComponent(fileName)
@@ -848,7 +743,6 @@ class CardDetailViewModel: ObservableObject {
                 return
             }
             
-            // 4. Switch to MainActor for DB Update
             await MainActor.run { [weak self] in
                 guard let self = self else { return }
                 
@@ -877,29 +771,19 @@ class CardDetailViewModel: ObservableObject {
 
     // MARK: - Thumbnail Generation
     
-    // FIX: 'nonisolated' allows this func to be called from anywhere.
-    // We use the nonisolated cache, so this is safe.
     nonisolated func generatePDFThumbnail(from url: URL) async -> UIImage? {
         let cacheKey = url.absoluteString as NSString
 
-        // 1. Check Cache (Safe because thumbnailCache is nonisolated/thread-safe)
         if let cachedImage = thumbnailCache.object(forKey: cacheKey) {
             return cachedImage
         }
 
-        // 2. Generate in Background (Off Main Thread)
-        // Since this function is already nonisolated, we don't *strictly* need Task.detached
-        // to exit the main actor, but it's good for clarity that we are running potentially heavy
-        // work in the background. However, capturing 'thumbnailCache' in a detached task
-        // requires it to be sendable or nonisolated. Since we made it nonisolated, this works.
         return await Task.detached(priority: .userInitiated) { [thumbnailCache] in
-            // Create the document. This can be slow for large PDFs.
             guard let document = PDFDocument(url: url),
                   let page = document.page(at: 0) else {
                 return nil
             }
 
-            // Calculate size and render
             let pageRect = page.bounds(for: .mediaBox)
             let renderer = UIGraphicsImageRenderer(size: pageRect.size)
 
@@ -912,23 +796,18 @@ class CardDetailViewModel: ObservableObject {
                 page.draw(with: .mediaBox, to: cgContext)
             }
 
-            // 3. Cache the result
             thumbnailCache.setObject(thumbnail, forKey: cacheKey)
-
             return thumbnail
         }.value
     }
     
     func generateDocxThumbnail(from url: URL, scale: CGFloat, completion: @escaping (UIImage?) -> Void) {
         let size = CGSize(width: 80, height: 100)
-        // Use the passed scale instead of UIScreen.main.scale
         let request = QLThumbnailGenerator.Request(fileAt: url, size: size, scale: scale, representationTypes: .thumbnail)
         
         QLThumbnailGenerator.shared.generateBestRepresentation(for: request) { representation, error in
             guard let generatedImage = representation?.uiImage else {
-                DispatchQueue.main.async {
-                    completion(nil)
-                }
+                DispatchQueue.main.async { completion(nil) }
                 return
             }
             
@@ -938,9 +817,7 @@ class CardDetailViewModel: ObservableObject {
                 generatedImage.draw(in: CGRect(origin: .zero, size: generatedImage.size))
             }
             
-            DispatchQueue.main.async {
-                completion(finalImage)
-            }
+            DispatchQueue.main.async { completion(finalImage) }
         }
     }
     
@@ -951,7 +828,6 @@ class CardDetailViewModel: ObservableObject {
             .compactMap { $0.getFileURL() }
             .filter { FileManager.default.fileExists(atPath: $0.path) }
         
-        // Add files from selected folders
         for folder in selectedFolders {
             func recursivelyCollectFiles(from folder: Folder) {
                 let files = (folder.files ?? [])
@@ -968,7 +844,6 @@ class CardDetailViewModel: ObservableObject {
         }
         
         guard !urlsToShare.isEmpty else { return }
-        
         self.urlsToShare = urlsToShare
         self.isShowingMultiShareSheet = true
     }
@@ -990,10 +865,7 @@ class CardDetailViewModel: ObservableObject {
         
         recursivelyCollectFiles(from: folder)
         
-        guard !urls.isEmpty else {
-            // Optionally show an alert that the folder is empty
-            return
-        }
+        guard !urls.isEmpty else { return }
         
         self.urlsToShare = urls
         self.isShowingMultiShareSheet = true
@@ -1001,17 +873,14 @@ class CardDetailViewModel: ObservableObject {
     
     // MARK: - Multi-Select / Editing Methods
     
-    // Computed property to check if all *visible* items (files and folders) are selected
     var allVisibleItemsSelected: Bool {
-        // Build sets of visible IDs
         let visibleFileIDs = Set(filteredFileMetadata.map { $0.id })
         let visibleFolderIDs = Set(subfolders.map { $0.id })
-        // If there are no visible items at all, return false
         if visibleFileIDs.isEmpty && visibleFolderIDs.isEmpty { return false }
-        // Selected sets
+        
         let selectedFileIDs = Set(selectedFileMetadata.map { $0.id })
         let selectedFolderIDs = Set(selectedFolders.map { $0.id })
-        // Check both are fully covered
+        
         let filesCovered = selectedFileIDs.isSuperset(of: visibleFileIDs)
         let foldersCovered = selectedFolderIDs.isSuperset(of: visibleFolderIDs)
         return filesCovered && foldersCovered
@@ -1019,11 +888,9 @@ class CardDetailViewModel: ObservableObject {
     
     func toggleSelectAllItems() {
         if allVisibleItemsSelected {
-            // Deselect all visible
             selectedFileMetadata.subtract(filteredFileMetadata)
             selectedFolders.subtract(subfolders)
         } else {
-            // Select all visible
             selectedFileMetadata.formUnion(filteredFileMetadata)
             selectedFolders.formUnion(subfolders)
         }
@@ -1040,7 +907,7 @@ class CardDetailViewModel: ObservableObject {
     func deleteSelectedItems() {
         let metadataToDelete = selectedFileMetadata
         for metadata in metadataToDelete {
-            deleteFileMetadata(metadata) // Use the updated delete function
+            deleteFileMetadata(metadata)
         }
         
         let foldersToDelete = selectedFolders
@@ -1072,7 +939,7 @@ class CardDetailViewModel: ObservableObject {
         }
     }
     
-    // MARK: - iCloud Download Method (REWRITTEN)
+    // MARK: - iCloud Download Method
     
     func startDownload(for fileMetadata: FileMetadata) {
         guard let fileURL = fileMetadata.getFileURL() else {
@@ -1080,108 +947,72 @@ class CardDetailViewModel: ObservableObject {
             return
         }
         
-        // --- NEW PRE-FLIGHT CHECK ---
         do {
             if FileManager.default.fileExists(atPath: fileURL.path) {
                 let resourceValues = try fileURL.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey])
                 if resourceValues.ubiquitousItemDownloadingStatus == .current {
-                    print("File already exists and is .current, opening.")
                     self.documentToPreview = PreviewableDocument(url: fileURL)
                     return
                 }
             }
-        } catch {
-             print("Pre-flight check failed: \(error.localizedDescription). Proceeding with download attempt.")
-        }
-        // --- END NEW CHECK ---
+        } catch {}
         
-        // File doesn't exist or is not .current, start download
         self.fileToDownload = fileMetadata
         self.isDownloading = true
         
         Task(priority: .userInitiated) {
             do {
-                // This is the call that tells iCloud Drive to start downloading
                 try FileManager.default.startDownloadingUbiquitousItem(at: fileURL)
-                
-                // Now we poll...
                 let success = await pollForFile(at: fileURL)
                 
-                // Once done, update UI on the main thread
                 await MainActor.run {
                     self.isDownloading = false
                     self.fileToDownload = nil
                     if success {
-                        print("Download complete, opening file.")
-                        // Re-check status one last time to be sure
                         if (try? fileURL.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey]))?.ubiquitousItemDownloadingStatus == .current {
                             self.documentToPreview = PreviewableDocument(url: fileURL)
-                        } else {
-                            print("Error: Polling succeeded but file is not .current on final check.")
                         }
-                    } else {
-                        print("Error: File download timed out.")
-                        // Optionally: show an error to the user
                     }
                 }
             } catch {
                 await MainActor.run {
                     self.isDownloading = false
                     self.fileToDownload = nil
-                    print("Error starting download: \(error.localizedDescription)")
-                    // Optionally: show an error to the user
                 }
             }
         }
     }
     
-    // --- POLLING FUNCTION (REWRITTEN) ---
     private func pollForFile(at url: URL, timeout: TimeInterval = 30.0) async -> Bool {
         let startTime = Date()
         var fileIsCurrent = false
 
         while !fileIsCurrent && Date().timeIntervalSince(startTime) < timeout {
             do {
-                // Try to get the resource values for the file
                 let resourceValues = try url.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey])
                 
                 switch resourceValues.ubiquitousItemDownloadingStatus {
                 case .current:
-                    print("Polling: File is .current")
-                    fileIsCurrent = true // Success! Exit loop.
-                
+                    fileIsCurrent = true
                 case .notDownloaded, .downloaded:
-                    print("Polling: File is .notDownloaded or .downloaded. Requesting download again.")
-                    // File is not local. Request the download (again).
                     try FileManager.default.startDownloadingUbiquitousItem(at: url)
-                
                 case nil:
-                    // status is nil, which means it's in the process of downloading.
-                    print("Polling: File is actively downloading (status is nil), continuing to wait...")
-                    // Do nothing, just let the loop continue and sleep
-                
+                    break
                 default:
-                    print("Polling: Unknown download status.")
-                    // Unknown status, let's wait.
+                    break
                 }
             } catch {
-                // This error (e.g., "file not found") can happen if the placeholder isn't even synced.
-                // We should request the download to create the placeholder.
-                print("Polling: Error getting resource values (\(error.localizedDescription)). Requesting download.")
                 do {
                     try FileManager.default.startDownloadingUbiquitousItem(at: url)
                 } catch {
-                    print("Polling: Failed to re-request download. Aborting poll.")
-                    return false // Abort
+                    return false
                 }
             }
             
-            // If not yet current, sleep before next check
             if !fileIsCurrent {
-                try? await Task.sleep(nanoseconds: 1_000_000_000) // Sleep for 1 second
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
             }
         }
-        
         return fileIsCurrent
     }
 }

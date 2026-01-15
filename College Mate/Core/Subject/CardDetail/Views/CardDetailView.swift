@@ -201,11 +201,9 @@ struct CardDetailView: View {
                     }
                 )
             }
-            // ADDED: Sheet modifier for the new note view
-            .sheet(isPresented: $viewModel.isShowingNoteSheet, onDismiss: {
-                viewModel.saveSubjectNote() // Save when sheet is dismissed
-            }) {
-                SubjectNoteSheetView(noteText: $viewModel.subjectNote)
+            // FIXED: Removed onDismiss { saveSubjectNote }, as the new list saves automatically.
+            .sheet(isPresented: $viewModel.isShowingNoteSheet) {
+                SubjectTopicsListView(subject: viewModel.subject)
             }
             .overlay {
                 if viewModel.isDownloading {
@@ -1141,52 +1139,6 @@ struct CardDetailView: View {
     private func playNavigationHaptic() {
         let generator = UIImpactFeedbackGenerator(style: .light)
         generator.impactOccurred()
-    }
-    
-    // Helper function for haptics
-    private func playHaptic(style: UIImpactFeedbackGenerator.FeedbackStyle) {
-        let generator = UIImpactFeedbackGenerator(style: style)
-        generator.impactOccurred()
-    }
-}
-
-// ADDED: New view for the note sheet
-// MARK: - Subject Note Sheet
-struct SubjectNoteSheetView: View {
-    @Binding var noteText: String
-    @Environment(\.dismiss) private var dismiss
-    
-    private let placeholder = "Write important topics for exam or paste Drive Links"
-    
-    var body: some View {
-        NavigationView {
-            ZStack(alignment: .topLeading) {
-                // TextEditor
-                TextEditor(text: $noteText)
-                    .padding(4)
-                    .frame(minHeight: 200, maxHeight: .infinity)
-                
-                // Placeholder
-                if noteText.isEmpty {
-                    Text(placeholder)
-                        .foregroundColor(Color(UIColor.placeholderText))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 12)
-                        .allowsHitTesting(false)
-                }
-            }
-            .padding()
-            .navigationTitle("Important Topics")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        playHaptic(style: .medium)
-                        dismiss()
-                    }
-                }
-            }
-        }
     }
     
     // Helper function for haptics
