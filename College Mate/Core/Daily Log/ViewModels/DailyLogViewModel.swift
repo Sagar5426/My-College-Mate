@@ -86,60 +86,69 @@ class DailyLogViewModel: ObservableObject {
     }
     
     func updateAttendance(for record: AttendanceRecord, in subject: Subject, to newStatus: String) {
-        let oldStatus = record.status
-        guard oldStatus != newStatus else { return }
+            let oldStatus = record.status
+            guard oldStatus != newStatus else { return }
 
-        // Attendance Calculation Logic
-        if newStatus == "Attended" {
-            if oldStatus == "Not Attended" { subject.attendance?.attendedClasses += 1 }
-            else if oldStatus == "Canceled" {
-                subject.attendance?.attendedClasses += 1
-                subject.attendance?.totalClasses += 1
+            // Attendance Calculation Logic
+            if newStatus == "Attended" {
+                if oldStatus == "Not Attended" {
+                    subject.attendance?.attendedClasses += 1
+                }
+                else if oldStatus == "Canceled" {
+                    subject.attendance?.attendedClasses += 1
+                    subject.attendance?.totalClasses += 1
+                }
+            } else if newStatus == "Not Attended" {
+                if oldStatus == "Attended" {
+                    // FIX: Prevent negative values
+                    subject.attendance?.attendedClasses = max(0, (subject.attendance?.attendedClasses ?? 0) - 1)
+                }
+                else if oldStatus == "Canceled" {
+                    subject.attendance?.totalClasses += 1
+                }
+            } else if newStatus == "Canceled" {
+                if oldStatus == "Attended" {
+                    // FIX: Prevent negative values for both attended and total
+                    subject.attendance?.attendedClasses = max(0, (subject.attendance?.attendedClasses ?? 0) - 1)
+                    subject.attendance?.totalClasses = max(0, (subject.attendance?.totalClasses ?? 0) - 1)
+                } else if oldStatus == "Not Attended" {
+                    // FIX: Prevent negative values for total
+                    subject.attendance?.totalClasses = max(0, (subject.attendance?.totalClasses ?? 0) - 1)
+                }
             }
-        } else if newStatus == "Not Attended" {
-            if oldStatus == "Attended" { subject.attendance?.attendedClasses -= 1 }
-            else if oldStatus == "Canceled" { subject.attendance?.totalClasses += 1 }
-        } else if newStatus == "Canceled" {
-            if oldStatus == "Attended" {
-                subject.attendance?.attendedClasses -= 1
-                subject.attendance?.totalClasses -= 1
-            } else if oldStatus == "Not Attended" {
-                subject.attendance?.totalClasses -= 1
-            }
-        }
-        
-        record.status = newStatus
-        
-        // --- Enhanced Descriptive Logs ---
-        var logAction = ""
-        
-        if newStatus == "Attended" {
-            logAction = "Marked as Present"
-        } else if newStatus == "Not Attended" {
-            logAction = "Marked as Absent"
-        } else if newStatus == "Canceled" {
-            // Context-aware messages for cancellation/reset
-            if record.isHoliday {
-                logAction = "Marked as Holiday"
-            } else if oldStatus == "Attended" {
-                logAction = "Present status reverted"
-            } else if oldStatus == "Not Attended" {
-                logAction = "Absent status reverted"
+            
+            record.status = newStatus
+            
+            // --- Enhanced Descriptive Logs ---
+            var logAction = ""
+            
+            if newStatus == "Attended" {
+                logAction = "Marked as Present"
+            } else if newStatus == "Not Attended" {
+                logAction = "Marked as Absent"
+            } else if newStatus == "Canceled" {
+                // Context-aware messages for cancellation/reset
+                if record.isHoliday {
+                    logAction = "Marked as Holiday"
+                } else if oldStatus == "Attended" {
+                    logAction = "Present status reverted"
+                } else if oldStatus == "Not Attended" {
+                    logAction = "Absent status reverted"
+                } else {
+                    logAction = "Decision reverted"
+                }
             } else {
-                logAction = "Decision reverted"
+                // Fallback for any other future statuses
+                logAction = "Status updated to \(newStatus)"
             }
-        } else {
-            // Fallback for any other future statuses
-            logAction = "Status updated to \(newStatus)"
+            
+            let log = AttendanceLogEntry(timestamp: Date(), subjectName: subject.name, action: logAction)
+            
+            subject.logs.append(log)
+            
+            // Trigger UI refresh if needed
+            objectWillChange.send()
         }
-        
-        let log = AttendanceLogEntry(timestamp: Date(), subjectName: subject.name, action: logAction)
-        
-        subject.logs.append(log)
-        
-        // Trigger UI refresh if needed
-        objectWillChange.send()
-    }
     
     // MARK - Private Helper Methods
     
