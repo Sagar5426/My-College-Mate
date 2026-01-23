@@ -26,7 +26,6 @@ struct ProfileView: View {
 
                     VStack {
                         Form {
-                            // MARK: - Refactored Subviews
                             ProfileHeaderView(viewModel: viewModel)
                             NotificationsSectionView(viewModel: viewModel)
                             SyncSectionView(viewModel: viewModel)
@@ -45,7 +44,6 @@ struct ProfileView: View {
                             }
                         }
                     }
-                    // MARK: - Modifiers & Sheets
                     .sheet(isPresented: $viewModel.isEditingProfile) {
                         EditProfileView(
                             viewModel: viewModel,
@@ -95,7 +93,6 @@ struct ProfileView: View {
                 }
             }
             
-            // MARK: - Sign Out Overlay
             if isSigningOut {
                 Color.black.opacity(0.4)
                     .ignoresSafeArea()
@@ -112,11 +109,8 @@ struct ProfileView: View {
         }
     }
     
-    // MARK: -
-    // MARK: - Nested Subviews
-    // MARK: -
-    
-    // MARK: - Profile Header View
+    // MARK: - Subviews
+
     private struct ProfileHeaderView: View {
         @ObservedObject var viewModel: ProfileViewModel
         
@@ -156,7 +150,6 @@ struct ProfileView: View {
         }
     }
 
-    // MARK: - Profile Image View
     private struct ProfileImageView: View {
         let profileImageData: Data?
         
@@ -171,7 +164,6 @@ struct ProfileView: View {
         }
     }
 
-    // MARK: - Notifications Section
     private struct NotificationsSectionView: View {
         @ObservedObject var viewModel: ProfileViewModel
         
@@ -185,7 +177,6 @@ struct ProfileView: View {
                     generator.impactOccurred()
                 }
                 
-                // Lead time picker appears only when notifications are enabled
                 if viewModel.notificationsEnabled {
                     Picker("Prior notification time", selection: $viewModel.notificationLeadMinutes) {
                         ForEach(viewModel.leadOptions) { option in
@@ -205,7 +196,6 @@ struct ProfileView: View {
         }
     }
 
-    // MARK: - Sync Section
     private struct SyncSectionView: View {
         @ObservedObject var viewModel: ProfileViewModel
         @State private var showSyncInfo = false
@@ -226,7 +216,6 @@ struct ProfileView: View {
                             viewModel.triggerSync()
                             showSyncInfo = true
                             
-                            // Hide after 30 seconds
                             DispatchQueue.main.asyncAfter(deadline: .now() + 30) {
                                 withAnimation {
                                     showSyncInfo = false
@@ -272,9 +261,6 @@ struct ProfileView: View {
         }
     }
 
-
-
-    // MARK: - Attendance History Section
     private struct AttendanceHistorySection: View {
         @ObservedObject var viewModel: ProfileViewModel
 
@@ -282,6 +268,7 @@ struct ProfileView: View {
             Section {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {
+                        // LEFT MENU (SUBJECTS)
                         Menu {
                             Button("All Subjects") {
                                 let generator = UIImpactFeedbackGenerator(style: .light)
@@ -299,12 +286,16 @@ struct ProfileView: View {
                             HStack(spacing: 4) {
                                 Image(systemName: "book.closed")
                                 Text(viewModel.selectedSubjectName)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
                             }
+                            .frame(width: 190, alignment: .leading)
                             .foregroundColor(.blue)
                         }
                         
                         Spacer()
                         
+                        // RIGHT MENU (DATES)
                         Menu {
                             Button(ProfileViewModel.FilterType.oneDay.rawValue) {
                                 let generator = UIImpactFeedbackGenerator(style: .light)
@@ -340,6 +331,7 @@ struct ProfileView: View {
                                 Image(systemName: "calendar")
                                 Text(viewModel.selectedFilter == .selectDate ? viewModel.selectedDate.formatted(.dateTime.day().month().year()) : viewModel.selectedFilter.rawValue)
                             }
+                            .frame(width: 130, alignment: .trailing)
                             .foregroundColor(.blue)
                         }
                     }
@@ -372,163 +364,172 @@ struct ProfileView: View {
         }
     }
 
-    // MARK: - Edit Profile View (Sheet)
-        private struct EditProfileView: View {
-            @ObservedObject var viewModel: ProfileViewModel
-            @Binding var isShowingPhotoPicker: Bool
-            @ObservedObject var authService: AuthenticationService
-            
-            @Binding var isSigningOut: Bool
-            
-            @Environment(\.dismiss) private var dismiss
-            
-            var body: some View {
-                NavigationStack {
-                    Form {
-                        // MARK: - Avatar Section
-                        Section {
-                            HStack {
-                                Spacer()
-                                Button(action: {
-                                    dismiss()
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                                        isShowingPhotoPicker = true
-                                    }
-                                }) {
-                                    ZStack(alignment: .bottomTrailing) {
-                                        if let imageData = viewModel.profileImageData, let uiImage = UIImage(data: imageData) {
-                                            Image(uiImage: uiImage)
-                                                .resizable()
-                                                .scaledToFill()
-                                                .frame(width: 120, height: 120)
-                                                .clipShape(Circle())
-                                        } else {
-                                            Image(systemName: "person.circle.fill")
-                                                .resizable()
-                                                .scaledToFill()
-                                                .frame(width: 120, height: 120)
-                                                .foregroundColor(.gray.opacity(0.5))
-                                        }
-
-                                        Image(systemName: "camera.circle.fill")
-                                            .font(.system(size: 32))
-                                            .foregroundColor(.accentColor)
-                                            .background(Circle().fill(Color(UIColor.systemGroupedBackground)))
-                                            .offset(x: 4, y: 4)
-                                    }
+    private struct EditProfileView: View {
+        @ObservedObject var viewModel: ProfileViewModel
+        @Binding var isShowingPhotoPicker: Bool
+        @ObservedObject var authService: AuthenticationService
+        
+        @Binding var isSigningOut: Bool
+        
+        @Environment(\.dismiss) private var dismiss
+        
+        var body: some View {
+            NavigationStack {
+                Form {
+                    Section {
+                        HStack {
+                            Spacer()
+                            Button(action: {
+                                dismiss()
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                                    isShowingPhotoPicker = true
                                 }
-                                .padding(.vertical, 16)
-                                Spacer()
-                            }
-                        }
-                        .listRowBackground(Color.clear)
-                        .listRowInsets(EdgeInsets())
+                            }) {
+                                ZStack(alignment: .bottomTrailing) {
+                                    if let imageData = viewModel.profileImageData, let uiImage = UIImage(data: imageData) {
+                                        Image(uiImage: uiImage)
+                                            .resizable()
+                                            .scaledToFill()
+                                            .frame(width: 120, height: 120)
+                                            .clipShape(Circle())
+                                    } else {
+                                        Image(systemName: "person.circle.fill")
+                                            .resizable()
+                                            .scaledToFill()
+                                            .frame(width: 120, height: 120)
+                                            .foregroundColor(.gray.opacity(0.5))
+                                    }
 
-                        // MARK: - Basic Info Section
-                        Section(header: Text("Basic Information")) {
-                            HStack(spacing: 12) {
-                                Image(systemName: "person.fill")
-                                    .foregroundColor(.gray)
-                                    .frame(width: 20)
-                                TextField("Enter your name", text: $viewModel.username)
-                                    .foregroundColor(.primary)
-                                    .textInputAutocapitalization(.words)
-                            }
-                            
-                            HStack(spacing: 12) {
-                                Image(systemName: "graduationcap.fill")
-                                    .foregroundColor(.gray)
-                                    .frame(width: 20)
-                                TextField("Enter your college name", text: $viewModel.collegeName)
-                                    .foregroundColor(.primary)
-                                    .textInputAutocapitalization(.words)
-                            }
-                        }
-
-                        // MARK: - User Details Section
-                        Section(header: Text("User Details")) {
-                            HStack {
-                                Text("Email").foregroundStyle(.secondary)
-                                Spacer()
-                                TextField("Email", text: $viewModel.email)
-                                    .multilineTextAlignment(.trailing)
-                                    .keyboardType(.emailAddress)
-                                    .textInputAutocapitalization(.never)
-                                    .autocorrectionDisabled(true)
-                            }
-
-                            DatePicker("Date of Birth", selection: $viewModel.userDob, displayedComponents: .date)
-                                .foregroundStyle(.secondary)
-
-                            Picker("Gender", selection: $viewModel.gender) {
-                                ForEach(ProfileViewModel.Gender.allCases, id: \.self) { genderOption in
-                                    Text(genderOption.rawValue)
+                                    Image(systemName: "camera.circle.fill")
+                                        .font(.system(size: 32))
+                                        .foregroundColor(.accentColor)
+                                        .background(Circle().fill(Color(UIColor.systemGroupedBackground)))
+                                        .offset(x: 4, y: 4)
                                 }
                             }
-                            .foregroundStyle(.secondary)
+                            .padding(.vertical, 16)
+                            Spacer()
+                        }
+                    }
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets())
+
+                    Section(header: Text("Basic Information")) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "person.fill")
+                                .foregroundColor(.gray)
+                                .frame(width: 20)
+                            TextField("Enter your name", text: $viewModel.username)
+                                .foregroundColor(.primary)
+                                .textInputAutocapitalization(.words)
                         }
                         
-                        // MARK: - Sign Out Section
-                        Section {
-                            Button(role: .destructive) {
-                                let generator = UIImpactFeedbackGenerator(style: .heavy)
-                                generator.impactOccurred()
-                                
-                                dismiss()
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                                    withAnimation(.easeIn(duration: 0.2)) {
-                                        isSigningOut = true
-                                    }
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                        authService.logout()
-                                    }
+                        HStack(spacing: 12) {
+                            Image(systemName: "graduationcap.fill")
+                                .foregroundColor(.gray)
+                                .frame(width: 20)
+                            TextField("Enter your college name", text: $viewModel.collegeName)
+                                .foregroundColor(.primary)
+                                .textInputAutocapitalization(.words)
+                        }
+                    }
+
+                    Section(header: Text("User Details")) {
+                        HStack {
+                            Text("Email").foregroundStyle(.secondary)
+                            Spacer()
+                            TextField("Email", text: $viewModel.email)
+                                .multilineTextAlignment(.trailing)
+                                .keyboardType(.emailAddress)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled(true)
+                        }
+
+                        DatePicker("Date of Birth", selection: $viewModel.userDob, displayedComponents: .date)
+                            .foregroundStyle(.secondary)
+
+                        Picker("Gender", selection: $viewModel.gender) {
+                            ForEach(ProfileViewModel.Gender.allCases, id: \.self) { genderOption in
+                                Text(genderOption.rawValue)
+                            }
+                        }
+                        .foregroundStyle(.secondary)
+                    }
+                    
+                    Section {
+                        Button(role: .destructive) {
+                            let generator = UIImpactFeedbackGenerator(style: .heavy)
+                            generator.impactOccurred()
+                            
+                            dismiss()
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                withAnimation(.easeIn(duration: 0.2)) {
+                                    isSigningOut = true
                                 }
-                            } label: {
-                                Text("Sign Out")
-                                    .fontWeight(.semibold)
-                                    .frame(maxWidth: .infinity, alignment: .center)
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                    authService.logout()
+                                }
                             }
+                        } label: {
+                            Text("Sign Out")
+                                .fontWeight(.semibold)
+                                .frame(maxWidth: .infinity, alignment: .center)
                         }
                     }
-                    .scrollContentBackground(.hidden) // IMPORTANT: This makes your theme background visible
-                    .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
-                    .navigationTitle("Edit Profile")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("Cancel") {
-                                let generator = UIImpactFeedbackGenerator(style: .light)
-                                generator.impactOccurred()
-                                dismiss()
-                            }
-                        }
-                        ToolbarItem(placement: .confirmationAction) {
-                            Button("Save") {
-                                let generator = UIImpactFeedbackGenerator(style: .medium)
-                                generator.impactOccurred()
-                                dismiss()
-                            }.bold()
-                        }
-                    }
-                    .scrollDismissesKeyboard(.interactively)
                 }
+                .scrollContentBackground(.hidden)
+                .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
+                .navigationTitle("Edit Profile")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") {
+                            let generator = UIImpactFeedbackGenerator(style: .light)
+                            generator.impactOccurred()
+                            dismiss()
+                        }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Save") {
+                            let generator = UIImpactFeedbackGenerator(style: .medium)
+                            generator.impactOccurred()
+                            dismiss()
+                        }.bold()
+                    }
+                }
+                .scrollDismissesKeyboard(.interactively)
             }
         }
+    }
 
-    // MARK: - Date Picker Sheet (Sheet)
+    // MARK: - FIXED DATE PICKER SHEET
     private struct ProfileDatePickerSheet: View {
         @ObservedObject var viewModel: ProfileViewModel
+        
+        // ✅ FIX: Initialize detent based on device type
+        // iPad -> Defaults to .large (Full Screen-ish)
+        // iPhone -> Defaults to .medium (Half Screen)
+        @State private var currentDetent: PresentationDetent = UIDevice.current.userInterfaceIdiom == .pad ? .large : .medium
 
         var body: some View {
-            VStack {
-                DatePicker(
-                    "Select a Date",
-                    selection: $viewModel.selectedDate,
-                    in: ...Date(),
-                    displayedComponents: .date
-                )
-                .datePickerStyle(GraphicalDatePickerStyle())
-                .padding()
+            VStack(spacing: 0) {
+                // Handle indicator
+                Capsule()
+                    .fill(Color.secondary.opacity(0.3))
+                    .frame(width: 36, height: 5)
+                    .padding(.top, 8)
+                    .padding(.bottom, 10)
+                
+                ScrollView {
+                    DatePicker(
+                        "Select a Date",
+                        selection: $viewModel.selectedDate,
+                        in: ...Date(),
+                        displayedComponents: .date
+                    )
+                    .datePickerStyle(GraphicalDatePickerStyle())
+                    .padding()
+                }
                 
                 Button(action: {
                     let generator = UIImpactFeedbackGenerator(style: .medium)
@@ -546,13 +547,13 @@ struct ProfileView: View {
                 .foregroundColor(.white)
                 .cornerRadius(10)
                 .padding(.horizontal)
+                .padding(.bottom)
             }
-            .padding(.vertical)
-            .presentationDetents([.medium])
+            // ✅ FIX: Use selection binding to enforce the default while allowing resizing
+            .presentationDetents([.medium, .large], selection: $currentDetent)
         }
     }
 
-    // MARK: - Image Cropper Full Screen (Full Screen Cover)
     private struct ProfileImageCropperFullScreen: View {
         let image: UIImage
         @ObservedObject var viewModel: ProfileViewModel
@@ -573,7 +574,6 @@ struct ProfileView: View {
     }
 }
 
-
 #Preview {
     ProfileView(isShowingProfileView: .constant(true))
         .modelContainer(for: Subject.self, inMemory: true)
@@ -581,7 +581,6 @@ struct ProfileView: View {
         .preferredColorScheme(.dark)
 }
 
-// MARK: - DateFormatter Helper
 extension DateFormatter {
     static let shortTime: DateFormatter = {
         let formatter = DateFormatter()
@@ -590,4 +589,3 @@ extension DateFormatter {
         return formatter
     }()
 }
-
