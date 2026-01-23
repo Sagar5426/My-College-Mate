@@ -142,65 +142,81 @@ struct DailyLogView: View {
     }
 }
 
-// MARK: - Bulk Action Row (Updated Spring Animation)
+// MARK: - Bulk Action Row (Vertical Coin Rotation)
 struct BulkActionRow: View {
     @ObservedObject var viewModel: DailyLogViewModel
-    
-    // Animation Offset State
-    @State private var offset: CGFloat = 0
-    
+
+    @State private var rotation: Double = 0
+    @State private var isAnimating = false
+
     var body: some View {
         HStack {
-            // Mark All Toggle Button
-            Button(action: {
-                triggerSpringAnimation()
-            }) {
-                HStack(spacing: 6) {
-                    Image(systemName: viewModel.areAllMarkedPresent ? "xmark.circle.fill" : "checkmark.circle.fill")
-                        .contentTransition(.symbolEffect(.replace))
-                    
-                    Text(viewModel.areAllMarkedPresent ? "Mark All Absent" : "Mark All Present")
-                }
-                .font(.subheadline)
-                .fontWeight(.medium)
-                .foregroundStyle(viewModel.areAllMarkedPresent ? .red : .green)
-                .offset(x: offset)
-            }
-            .buttonStyle(.plain)
-            
-            Spacer()
-            
-            // Stats Info
-            VStack(alignment: .trailing, spacing: 2) {
+
+            // Stats Info (UNCHANGED)
+            VStack(alignment: .leading, spacing: 2) {
                 Text("Total classes: \(viewModel.totalClassesCount)")
                 Text("Marked classes: \(viewModel.markedClassesCount)")
             }
             .font(.caption)
             .foregroundStyle(.secondary)
-        }
-    }
-    
-    // MARK: - Refined Animation Logic
-    private func triggerSpringAnimation() {
-        // 1. Wind up: Move to the Right
-        // Increased distance to 25 to generate more "swing" energy
-        withAnimation(.easeOut(duration: 0.2)) {
-            offset = 25
-        }
-        
-        // 2. Release: Snap Back
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            viewModel.toggleAllAttendance()
-            
-            // Damping fraction lowered to 0.25.
-            // This creates a "loose" spring that overshoots 0 (swings left)
-            // and wobbles back and forth evenly before settling.
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.25, blendDuration: 0)) {
-                offset = 0
+
+            Spacer()
+
+            Button {
+                guard !isAnimating else { return }
+                performVerticalFlip()
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: viewModel.areAllMarkedPresent
+                          ? "xmark.circle.fill"
+                          : "checkmark.circle.fill")
+
+                    Text(viewModel.areAllMarkedPresent
+                         ? "Mark All Absent"
+                         : "Mark All Present")
+                }
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundStyle(viewModel.areAllMarkedPresent ? .red : .green)
+                .rotation3DEffect(
+                    .degrees(rotation),
+                    axis: (x: 1, y: 0, z: 0)   // ✅ vertical rotation
+                )
             }
+            .buttonStyle(.plain)
         }
     }
+
+    private func performVerticalFlip() {
+        isAnimating = true
+
+        let totalDuration: Double = 1
+        let halfDuration = totalDuration / 2
+
+        // 1️⃣ Continuous 360° rotation (no spring = no pause)
+        withAnimation(.easeInOut(duration: totalDuration)) {
+            rotation += 360
+        }
+
+        // 2️⃣ Change label exactly at midpoint (invisible moment)
+        DispatchQueue.main.asyncAfter(deadline: .now() + halfDuration) {
+            viewModel.toggleAllAttendance()
+        }
+
+        // 3️⃣ Subtle spring settle at the end
+        DispatchQueue.main.asyncAfter(deadline: .now() + totalDuration) {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+                rotation += 0.001
+            }
+            isAnimating = false
+        }
+    }
+
 }
+
+
+
+
 
 // MARK: - Control Panel View
 struct ControlPanelView: View {

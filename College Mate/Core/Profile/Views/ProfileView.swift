@@ -329,7 +329,20 @@ struct ProfileView: View {
                         } label: {
                             HStack(spacing: 4) {
                                 Image(systemName: "calendar")
-                                Text(viewModel.selectedFilter == .selectDate ? viewModel.selectedDate.formatted(.dateTime.day().month().year()) : viewModel.selectedFilter.rawValue)
+                                Text(
+                                    viewModel.selectedFilter == .selectDate
+                                    ? viewModel.selectedDate.formatted(
+                                        Date.FormatStyle()
+                                            .day(.twoDigits)
+                                            .month(.abbreviated)
+                                            .year()
+                                      )
+                                    : viewModel.selectedFilter.rawValue
+                                )
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                                .fixedSize(horizontal: true, vertical: false)
+
                             }
                             .frame(width: 130, alignment: .trailing)
                             .foregroundColor(.blue)
@@ -505,21 +518,23 @@ struct ProfileView: View {
     // MARK: - FIXED DATE PICKER SHEET
     private struct ProfileDatePickerSheet: View {
         @ObservedObject var viewModel: ProfileViewModel
-        
-        // ✅ FIX: Initialize detent based on device type
-        // iPad -> Defaults to .large (Full Screen-ish)
-        // iPhone -> Defaults to .medium (Half Screen)
-        @State private var currentDetent: PresentationDetent = UIDevice.current.userInterfaceIdiom == .pad ? .large : .medium
+
+        @State private var currentDetent: PresentationDetent =
+            UIDevice.current.userInterfaceIdiom == .pad ? .large : .medium
+
+        private let footerHeight: CGFloat = 70
 
         var body: some View {
             VStack(spacing: 0) {
+
                 // Handle indicator
                 Capsule()
                     .fill(Color.secondary.opacity(0.3))
                     .frame(width: 36, height: 5)
                     .padding(.top, 8)
                     .padding(.bottom, 10)
-                
+
+                // 🔑 Scrollable content with reserved bottom space
                 ScrollView {
                     DatePicker(
                         "Select a Date",
@@ -527,32 +542,38 @@ struct ProfileView: View {
                         in: ...Date(),
                         displayedComponents: .date
                     )
-                    .datePickerStyle(GraphicalDatePickerStyle())
+                    .datePickerStyle(.graphical)
                     .padding()
+
+                    // 👇 Spacer so calendar never hides behind button
+                    Color.clear
+                        .frame(height: footerHeight)
                 }
-                
-                Button(action: {
+
+                // Fixed footer button
+                Button {
                     let generator = UIImpactFeedbackGenerator(style: .medium)
                     generator.impactOccurred()
-                    
+
                     viewModel.isShowingDatePicker = false
                     viewModel.filterAttendanceLogs()
-                }) {
+                } label: {
                     Text("Done")
                         .fontWeight(.semibold)
                         .frame(maxWidth: .infinity)
+                        .frame(height: 44)
                 }
-                .padding()
                 .background(Color.blue)
                 .foregroundColor(.white)
                 .cornerRadius(10)
                 .padding(.horizontal)
                 .padding(.bottom)
+                .padding(.top, 6)
             }
-            // ✅ FIX: Use selection binding to enforce the default while allowing resizing
             .presentationDetents([.medium, .large], selection: $currentDetent)
         }
     }
+
 
     private struct ProfileImageCropperFullScreen: View {
         let image: UIImage
