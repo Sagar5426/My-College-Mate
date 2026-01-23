@@ -43,6 +43,7 @@ struct DailyLogView: View {
             ScrollView(.vertical) {
                 LazyVStack(spacing: 16, pinnedViews: [.sectionHeaders]) {
                     Section {
+                        // 1. Navigation & Holiday Controls
                         ControlPanelView(
                             viewModel: viewModel,
                             viewID: viewID,
@@ -51,8 +52,19 @@ struct DailyLogView: View {
                             onNext: animateToNextDay
                         )
                         
-                        Divider().padding(.vertical)
+                        // 2. NEW: Grouped Bulk Actions & Divider for tighter spacing
+                        VStack(spacing: 4) { // Reduced spacing between View and Divider
+                            if !viewModel.dailyClasses.isEmpty && !viewModel.isHoliday {
+                                BulkActionRow(viewModel: viewModel)
+                                    .padding(.horizontal, 8)
+                                    .transition(.opacity)
+                            }
+                            
+                            Divider()
+                                .padding(.bottom, 8) // Keep some space below the divider
+                        }
                         
+                        // 3. Classes List
                         ClassesList(viewModel: viewModel)
                             .id(viewID)
                             .transition(customSlideTransition)
@@ -87,7 +99,6 @@ struct DailyLogView: View {
                     .transition(.move(edge: .leading))
                 }
             }
-            // Handle CoreData notifications if needed
             .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextObjectsDidChange)) { _ in }
         }
         .animation(.spring(duration: 0.4), value: viewModel.isShowingDatePicker)
@@ -131,6 +142,39 @@ struct DailyLogView: View {
     }
 }
 
+// MARK: - Bulk Action Row (New Component)
+struct BulkActionRow: View {
+    @ObservedObject var viewModel: DailyLogViewModel
+    
+    var body: some View {
+        HStack {
+            // Mark All Toggle Button
+            Button(action: {
+                viewModel.toggleAllAttendance()
+            }) {
+                HStack(spacing: 6) {
+                    Image(systemName: viewModel.areAllMarkedPresent ? "xmark.circle.fill" : "checkmark.circle.fill")
+                    Text(viewModel.areAllMarkedPresent ? "Mark All Absent" : "Mark All Present")
+                }
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundStyle(viewModel.areAllMarkedPresent ? .red : .green)
+            }
+            .buttonStyle(.plain)
+            
+            Spacer()
+            
+            // Stats Info
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("Total classes: \(viewModel.totalClassesCount)")
+                Text("Marked classes: \(viewModel.markedClassesCount)")
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+    }
+}
+
 // MARK: - Control Panel View
 struct ControlPanelView: View {
     @ObservedObject var viewModel: DailyLogViewModel
@@ -145,9 +189,10 @@ struct ControlPanelView: View {
     
     var body: some View {
         VStack(spacing: 16) {
-            HStack(spacing: 0) { // spacing 0 ensures strict control over layout
+            // Date Navigation Row
+            HStack(spacing: 0) {
                 
-                // LEFT CHEVRON (Static)
+                // LEFT CHEVRON
                 Button(action: {
                     let generator = UIImpactFeedbackGenerator(style: .medium)
                     generator.impactOccurred()
@@ -158,6 +203,7 @@ struct ControlPanelView: View {
                         .padding(.trailing, 8)
                 }
                 
+                // CENTER DATE
                 ZStack {
                     Button(action: {
                         let generator = UIImpactFeedbackGenerator(style: .medium)
@@ -181,7 +227,7 @@ struct ControlPanelView: View {
                 .compositingGroup()
                 .clipped()
                 
-                // RIGHT CHEVRON (Static)
+                // RIGHT CHEVRON
                 Button(action: {
                     let generator = UIImpactFeedbackGenerator(style: .medium)
                     generator.impactOccurred()
@@ -196,6 +242,7 @@ struct ControlPanelView: View {
             }
             .foregroundStyle(.blue)
             
+            // Holiday Button
             if !viewModel.dailyClasses.isEmpty {
                 Button(action: {
                     let generator = UIImpactFeedbackGenerator(style: .medium)
@@ -220,6 +267,7 @@ struct ControlPanelView: View {
         .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 15))
         .animation(.easeOut(duration: 0.25), value: viewModel.dailyClasses.isEmpty)
+        .animation(.spring(), value: viewModel.isHoliday)
     }
 }
 
@@ -229,8 +277,6 @@ struct ClassesList: View {
     @ObservedObject var viewModel: DailyLogViewModel
     
     var body: some View {
-        // ZStack ensures the layout container exists before/after transition
-        // preventing the "double view" glitch where they fight for layout space.
         ZStack(alignment: .top) {
             if viewModel.isHoliday {
                 VStack(spacing: 10) {
@@ -281,7 +327,6 @@ struct ClassAttendanceRow: View {
         subject.attendance?.percentage ?? 0.0
     }
     
-    // Updated Logic: Matches TimeTableView/SubjectCardView color thresholds
     private var attendanceColor: Color {
         guard let attendance = subject.attendance else { return .gray }
         let currentPercentage = attendance.percentage
@@ -315,14 +360,12 @@ struct ClassAttendanceRow: View {
                         Text("Room: \(classTime.roomNumber)")
                     }
                     
-                    // Updated Display: Rounds to nearest Int and clamps to 100%
                     Text("Attendance: \(Int(min(percentage, 100.0).rounded()))%")
                         .foregroundColor(attendanceColor)
                         .padding(.top, 2)
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                
             }
             
             Spacer()
@@ -350,7 +393,6 @@ struct ClassAttendanceRow: View {
                         .minimumScaleFactor(0.8)
                 }
                 .padding(12)
-
                 .contentShape(Rectangle())
                 .compositingGroup()
                 
@@ -358,19 +400,23 @@ struct ClassAttendanceRow: View {
                     .degrees(rotation),
                     axis: (x: 0.0, y: 1.0, z: 0.0)
                 )
-                .animation(.spring(response: 1.5, dampingFraction: 0.6).delay(0.1), value: rotation)
             }
         }
         .padding()
         .background(Color.secondary.opacity(0.1))
         .cornerRadius(10)
+        // Helper to trigger rotation animation on ANY status change
+        .onChange(of: record.status) {
+             withAnimation(.spring(response: 1.5, dampingFraction: 0.6)) {
+                 rotation = (rotation == 0 ? 360 : 0)
+             }
+        }
     }
     
     private func updateStatus(to newStatus: String) {
         if record.status != newStatus {
             let generator = UIImpactFeedbackGenerator(style: .medium)
             generator.impactOccurred()
-            rotation = (rotation == 0 ? 360 : 0)
             viewModel.updateAttendance(for: record, in: subject, to: newStatus)
         }
     }

@@ -31,6 +31,22 @@ class DailyLogViewModel: ObservableObject {
     // MARK: - Initializer
     init() {}
     
+    // MARK: - New Computed Properties for Bulk Actions
+    var totalClassesCount: Int {
+            dailyClasses.count
+        }
+        
+    // Counts classes that are either Present or Absent (excludes N/A)
+    var markedClassesCount: Int {
+        dailyClasses.filter { $0.record.status == "Attended" || $0.record.status == "Not Attended" }.count
+    }
+        
+    // Helper to determine the state of the Toggle Button
+    var areAllMarkedPresent: Bool {
+        guard !dailyClasses.isEmpty else { return false }
+        return dailyClasses.allSatisfy { $0.record.status == "Attended" }
+    }
+    
     // MARK: - Public Methods
     
     func setup(subjects: [Subject], modelContext: ModelContext) {
@@ -68,6 +84,27 @@ class DailyLogViewModel: ObservableObject {
         // Refresh to check if the day is still a holiday (it will be)
         checkHolidayStatus()
     }
+    
+    // MARK: - New Bulk Update Method
+        
+        func toggleAllAttendance() {
+            // If ALL are currently "Attended", switch ALL to "Not Attended" (Absent).
+            // Otherwise (if mixed, all Absent, or all N/A), switch ALL to "Attended" (Present).
+            let newStatus = areAllMarkedPresent ? "Not Attended" : "Attended"
+            
+            let generator = UIImpactFeedbackGenerator(style: .medium)
+            generator.impactOccurred()
+            
+            withAnimation {
+                for item in dailyClasses {
+                    // Only update if the status is actually changing to avoid unnecessary processing
+                    if item.record.status != newStatus {
+                        updateAttendance(for: item.record, in: item.subject, to: newStatus)
+                    }
+                }
+            }
+        }
+    
     
     // --- Core Attendance Logic ---
     
