@@ -29,8 +29,11 @@ class NotificationManager {
     /// Call this when your app first launches
     func requestAuthorization() {
         center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
-            if let error {
-                print("Notification authorization error: \(error.localizedDescription)")
+            Task { @MainActor in
+                if let error = error {
+                    print("Notification authorization error: \(error.localizedDescription)")
+                }
+                
             }
         }
     }
