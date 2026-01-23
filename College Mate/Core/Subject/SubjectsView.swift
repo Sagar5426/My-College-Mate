@@ -1,6 +1,6 @@
 import SwiftUI
 import SwiftData
-import CoreData // Import CoreData for the notification name
+import CoreData
 
 struct SubjectsView: View {
     @Environment(\.modelContext) var modelContext
@@ -8,9 +8,6 @@ struct SubjectsView: View {
     @State var isShowingAddSubject: Bool = false
     @State var isShowingProfileView = false
     
-    // This is used to force the view to refresh
-    @State private var viewID = UUID()
-
     var body: some View {
         NavigationStack {
             ScrollView(.vertical) {
@@ -34,7 +31,6 @@ struct SubjectsView: View {
                             // Show list of subjects if available
                             ForEach(subjects, id: \.id) { subject in
                                 NavigationLink {
-                                    
                                     CardDetailView(subject: subject, modelContext: modelContext)
                                 } label: {
                                     SubjectCardView(subject: subject)
@@ -50,8 +46,6 @@ struct SubjectsView: View {
                 }
                 .padding()
             }
-            // Add the view ID here
-            .id(viewID)
             .background(LinearGradient.appBackground)
             .frame(maxWidth: .infinity)
             .overlay(alignment: .bottomTrailing) {
@@ -62,14 +56,6 @@ struct SubjectsView: View {
             }
             .fullScreenCover(isPresented: $isShowingProfileView) {
                 ProfileView(isShowingProfileView: $isShowingProfileView)
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextObjectsDidChange)) { notification in
-                if !Thread.isMainThread {
-                    DispatchQueue.main.async {
-                        print("[SubjectsView] Received REMOTE modelContext did change. Forcing refresh.")
-                        viewID = UUID()
-                    }
-                }
             }
         }
     }
@@ -109,7 +95,7 @@ struct AddSubjectButton: View {
                 )
                 .shadow(color: .black.opacity(0.25), radius: 10, x: 0, y: 5)
         }
-        .padding() 
+        .padding()
         .sensoryFeedback(.impact(weight: .medium), trigger: isShowingAddSubject)
     }
 }
@@ -118,4 +104,3 @@ struct AddSubjectButton: View {
 #Preview {
     SubjectsView()
 }
-
