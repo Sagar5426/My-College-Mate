@@ -52,8 +52,8 @@ struct DailyLogView: View {
                             onNext: animateToNextDay
                         )
                         
-                        // 2. NEW: Grouped Bulk Actions & Divider for tighter spacing
-                        VStack(spacing: 4) { // Reduced spacing between View and Divider
+                        // 2. Grouped Bulk Actions & Divider
+                        VStack(spacing: 4) {
                             if !viewModel.dailyClasses.isEmpty && !viewModel.isHoliday {
                                 BulkActionRow(viewModel: viewModel)
                                     .padding(.horizontal, 8)
@@ -61,7 +61,7 @@ struct DailyLogView: View {
                             }
                             
                             Divider()
-                                .padding(.bottom, 8) // Keep some space below the divider
+                                .padding(.bottom, 8)
                         }
                         
                         // 3. Classes List
@@ -142,23 +142,29 @@ struct DailyLogView: View {
     }
 }
 
-// MARK: - Bulk Action Row (New Component)
+// MARK: - Bulk Action Row (Updated Spring Animation)
 struct BulkActionRow: View {
     @ObservedObject var viewModel: DailyLogViewModel
+    
+    // Animation Offset State
+    @State private var offset: CGFloat = 0
     
     var body: some View {
         HStack {
             // Mark All Toggle Button
             Button(action: {
-                viewModel.toggleAllAttendance()
+                triggerSpringAnimation()
             }) {
                 HStack(spacing: 6) {
                     Image(systemName: viewModel.areAllMarkedPresent ? "xmark.circle.fill" : "checkmark.circle.fill")
+                        .contentTransition(.symbolEffect(.replace))
+                    
                     Text(viewModel.areAllMarkedPresent ? "Mark All Absent" : "Mark All Present")
                 }
                 .font(.subheadline)
                 .fontWeight(.medium)
                 .foregroundStyle(viewModel.areAllMarkedPresent ? .red : .green)
+                .offset(x: offset)
             }
             .buttonStyle(.plain)
             
@@ -171,6 +177,27 @@ struct BulkActionRow: View {
             }
             .font(.caption)
             .foregroundStyle(.secondary)
+        }
+    }
+    
+    // MARK: - Refined Animation Logic
+    private func triggerSpringAnimation() {
+        // 1. Wind up: Move to the Right
+        // Increased distance to 25 to generate more "swing" energy
+        withAnimation(.easeOut(duration: 0.2)) {
+            offset = 25
+        }
+        
+        // 2. Release: Snap Back
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            viewModel.toggleAllAttendance()
+            
+            // Damping fraction lowered to 0.25.
+            // This creates a "loose" spring that overshoots 0 (swings left)
+            // and wobbles back and forth evenly before settling.
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.25, blendDuration: 0)) {
+                offset = 0
+            }
         }
     }
 }
@@ -314,7 +341,7 @@ struct ClassesList: View {
     }
 }
 
-// MARK: - Class Attendance Row (Updated)
+// MARK: - Class Attendance Row
 struct ClassAttendanceRow: View {
     let subject: Subject
     let classTime: ClassTime
@@ -405,7 +432,7 @@ struct ClassAttendanceRow: View {
         .padding()
         .background(Color.secondary.opacity(0.1))
         .cornerRadius(10)
-        // Helper to trigger rotation animation on ANY status change
+        // Trigger rotation on ANY status change
         .onChange(of: record.status) {
              withAnimation(.spring(response: 1.5, dampingFraction: 0.6)) {
                  rotation = (rotation == 0 ? 360 : 0)
