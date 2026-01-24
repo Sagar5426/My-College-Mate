@@ -1287,7 +1287,6 @@ struct FilesFolderIcon: View {
     }
 }
 
-
 // MARK: - SelectionOverlay
 struct SelectionOverlay: ViewModifier {
     let isSelected: Bool
@@ -1295,22 +1294,35 @@ struct SelectionOverlay: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            // 1. Independent Scale for the icon/content
+            .scaleEffect(isEditing && isSelected ? 0.92 : 1.0)
+            .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isSelected)
+            .opacity(isEditing && isSelected ? 0.7 : 1.0)
+            
+            // 2. Selection Indicator (Centered)
             .overlay(alignment: .center) {
                 if isEditing {
-                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 32, height: 32)
-                        .foregroundStyle(isSelected ? Color.blue : Color.gray)
-                        .background(
-                            Circle()
-                                .fill(Color.white)
-                                .padding(1)
-                        )
-                        .transition(.opacity)
+                    ZStack {
+                        // Background: Only visible when selected to fill the checkmark tick with white.
+                        // Hidden when unselected so the ring remains truly hollow.
+                        Circle()
+                            .fill(.white)
+                            .frame(width: 20, height: 20) // Slightly smaller so it fits inside the blue fill
+                            .opacity(isSelected ? 1.0 : 0.0)
+                        
+                        // The Icon: Morphs from Hollow Ring (White) -> Filled Checkmark (Blue)
+                        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 28, height: 28) // Standard touch-friendly size
+                            .foregroundStyle(isSelected ? Color.blue : Color.white)
+                            .contentTransition(.symbolEffect(.replace)) // The Magic Morph
+                            // Shadow to make the white ring "clearly visible" on light images
+                            .shadow(color: .black.opacity(0.2), radius: 1.5, x: 0, y: 1)
+                    }
                 }
             }
-            .animation(.easeInOut(duration: 0.2), value: isSelected)
+            // General animation for entering/exiting edit mode
             .animation(.easeInOut(duration: 0.2), value: isEditing)
     }
 }

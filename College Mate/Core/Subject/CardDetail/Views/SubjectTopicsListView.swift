@@ -230,6 +230,7 @@ struct TopicRowView: View {
                 Image(systemName: item.isCompleted ? "checkmark.circle.fill" : "circle")
                     .foregroundStyle(item.isCompleted ? .green : .gray)
                     .font(.title3)
+                    .contentTransition(.symbolEffect(.replace))
             }
             .buttonStyle(.plain)
             .padding(.top, 6)
