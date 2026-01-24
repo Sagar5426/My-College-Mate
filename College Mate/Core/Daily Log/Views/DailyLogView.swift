@@ -168,8 +168,16 @@ struct BulkActionRow: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: viewModel.areAllMarkedPresent
-                          ? "xmark.circle.fill"
-                          : "checkmark.circle.fill")
+                          ? "a.circle.fill"
+                          : "p.circle.fill")
+                        .font(.system(size: 22, weight: .bold))
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(
+                            .white,
+                            viewModel.areAllMarkedPresent ? .red : .green 
+                        )
+
+                    
 
                     Text(viewModel.areAllMarkedPresent
                          ? "Mark All Absent"
@@ -211,12 +219,7 @@ struct BulkActionRow: View {
             isAnimating = false
         }
     }
-
 }
-
-
-
-
 
 // MARK: - Control Panel View
 struct ControlPanelView: View {
