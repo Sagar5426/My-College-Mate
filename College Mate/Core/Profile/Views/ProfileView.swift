@@ -515,64 +515,45 @@ struct ProfileView: View {
         }
     }
 
-    // MARK: - FIXED DATE PICKER SHEET
+    // MARK: -DATE PICKER SHEET
     private struct ProfileDatePickerSheet: View {
         @ObservedObject var viewModel: ProfileViewModel
 
-        @State private var currentDetent: PresentationDetent =
-            UIDevice.current.userInterfaceIdiom == .pad ? .large : .medium
-
-        private let footerHeight: CGFloat = 70
-
         var body: some View {
-            VStack(spacing: 0) {
-
-                // Handle indicator
-                Capsule()
-                    .fill(Color.secondary.opacity(0.3))
-                    .frame(width: 36, height: 5)
-                    .padding(.top, 8)
-                    .padding(.bottom, 10)
-
-                // 🔑 Scrollable content with reserved bottom space
-                ScrollView {
-                    DatePicker(
-                        "Select a Date",
-                        selection: $viewModel.selectedDate,
-                        in: ...Date(),
-                        displayedComponents: .date
-                    )
-                    .datePickerStyle(.graphical)
-                    .padding()
-
-                    // 👇 Spacer so calendar never hides behind button
-                    Color.clear
-                        .frame(height: footerHeight)
+            VStack {
+                DatePicker(
+                    "Select a Date",
+                    selection: $viewModel.selectedDate,
+                    in: ...Date(),
+                    displayedComponents: .date
+                )
+                .datePickerStyle(.graphical)
+                .padding()
+                .onChange(of: viewModel.selectedDate) {
+                    viewModel.filterAttendanceLogs()
                 }
 
-                // Fixed footer button
                 Button {
                     let generator = UIImpactFeedbackGenerator(style: .medium)
                     generator.impactOccurred()
 
                     viewModel.isShowingDatePicker = false
-                    viewModel.filterAttendanceLogs()
                 } label: {
                     Text("Done")
                         .fontWeight(.semibold)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 44)
                 }
+                .padding()
                 .background(Color.blue)
                 .foregroundColor(.white)
                 .cornerRadius(10)
                 .padding(.horizontal)
-                .padding(.bottom)
-                .padding(.top, 6)
             }
-            .presentationDetents([.medium, .large], selection: $currentDetent)
+            .padding(.vertical)
+            .presentationDetents([.medium])
         }
     }
+
 
 
     private struct ProfileImageCropperFullScreen: View {

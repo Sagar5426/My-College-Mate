@@ -81,13 +81,15 @@ struct CardDetailView: View {
             }
             .navigationTitle(viewModel.subject.name)
             .navigationBarTitleDisplayMode(.inline)
+            // Hide navigation bar when search is active to mimic Files app behavior
+            .toolbar(isSearchFocused ? .hidden : .visible, for: .navigationBar)
             .toolbar { mainToolbar }
             .alert("Delete this Subject", isPresented: $viewModel.isShowingDeleteAlert) {
                 deleteAlertContent
             } message: {
                 Text("Deleting this subject will remove all associated data. Are you sure?")
             }
-            // ADDED: Alert for deleting a single item
+            // Alert for deleting a single item
             .alert(singleDeleteAlertTitle, isPresented: $viewModel.isShowingSingleDeleteAlert) {
                 Button("Delete", role: .destructive) {
                     playHaptic(style: .heavy)
@@ -201,7 +203,6 @@ struct CardDetailView: View {
                     }
                 )
             }
-            // FIXED: Removed onDismiss { saveSubjectNote }, as the new list saves automatically.
             .sheet(isPresented: $viewModel.isShowingNoteSheet) {
                 SubjectTopicsListView(subject: viewModel.subject)
             }
@@ -210,6 +211,8 @@ struct CardDetailView: View {
                     downloadingOverlay
                 }
             }
+            // Animate changes to navigation bar visibility
+            .animation(.easeInOut(duration: 0.3), value: isSearchFocused)
     }
     
     // MARK: - Subviews
@@ -221,7 +224,6 @@ struct CardDetailView: View {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Button("Cancel") {
                     playHaptic(style: .light)
-                    // CHANGED: Use standard animation when exiting edit mode (no spring)
                     withAnimation(.easeInOut(duration: 0.6)) {
                         viewModel.toggleEditMode()
                     }
@@ -231,16 +233,6 @@ struct CardDetailView: View {
             // Keep the non-editing mode toolbar items
             ToolbarItem(placement: .topBarTrailing) {
                 HStack {
-                    Button {
-                        playHaptic(style: .light)
-                        withAnimation(.easeOut(duration: 0.2)) {
-                            viewModel.toggleSearchBarVisibility()
-                        }
-                        isSearchFocused.toggle()
-                    } label: {
-                        Image(systemName: "magnifyingglass")
-                    }
-                    
                     Menu {
                         Button {
                             playHaptic(style: .light)
@@ -256,7 +248,8 @@ struct CardDetailView: View {
                             Label("Delete Subject", systemImage: "trash")
                         }
                     } label: {
-                        Image(systemName: "ellipsis.circle")
+                        Image(systemName: "ellipsis")
+                            .foregroundStyle(.white)
                     }
                     .onTapGesture {
                         playHaptic(style: .light)
@@ -268,9 +261,9 @@ struct CardDetailView: View {
     
     private var viewBodyContent: some View {
         VStack(spacing: 0) {
-            if viewModel.isSearchBarVisible {
-                searchBarView
-            }
+            // MOVED: Permanent Search Bar (always visible)
+            searchBarView
+            
             filterView
             breadcrumbView
             Divider()
@@ -284,37 +277,76 @@ struct CardDetailView: View {
                 addButton
             }
         }
-        // CHANGED: Removed explicit animation modifier from here to allow individual animations for enter/exit
     }
     
     private var searchBarView: some View {
-        HStack {
-            Image(systemName: "magnifyingglass")
-                .foregroundColor(.secondary)
+        HStack(spacing: 12) {
+            // Glass Search Field
+            HStack {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(.secondary)
+                
+                TextField("Search in \(viewModel.subject.name)...", text: $viewModel.searchText)
+                    .focused($isSearchFocused)
+                    .onSubmit { viewModel.performSearch() }
+                    .onChange(of: viewModel.searchText) { viewModel.performSearch() }
+                
+                // Internal Clear Button
+                if !viewModel.searchText.isEmpty {
+                    Button(action: {
+                        viewModel.searchText = ""
+                    }) {
+                        Image(systemName: "multiply.circle.fill")
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+            .padding(.vertical, 10)
+            .padding(.horizontal, 12)
+            // UPDATED: Use your custom .glassEffect()
+            .background {
+                Capsule()
+                    .fill(.clear) // Ensure shape is transparent for glass background to show
+                    .glassEffect()
+            }
+            .overlay(
+                Capsule()
+                    .stroke(Color.white.opacity(0.3), lineWidth: 1)
+            )
+            .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
             
-            TextField("Search in \(viewModel.subject.name)...", text: $viewModel.searchText)
-                .focused($isSearchFocused)
-                .onSubmit { viewModel.performSearch() }
-                .onChange(of: viewModel.searchText) { viewModel.performSearch() }
-            
-            if !viewModel.searchText.isEmpty {
+            // "X mark button" on the right side
+            // Appears when search is focused
+            if isSearchFocused {
                 Button(action: {
                     playHaptic(style: .light)
-                    viewModel.clearSearch()
+                    // Clear text AND Dismiss Keyboard
+                    viewModel.searchText = ""
+                    isSearchFocused = false
                 }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(.secondary)
+                    Image(systemName: "xmark")
+                        .font(.body.weight(.bold))
+                        .foregroundStyle(.white)
+                        .padding(10)
+                        // UPDATED: Use your custom .glassEffect() on Circle
+                        .background {
+                            Circle()
+                                .fill(.clear) // Ensure shape is transparent for glass background to show
+                                .glassEffect()
+                        }
+                        .overlay(
+                            Circle()
+                                .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                        )
                 }
-                .buttonStyle(.plain)
+                .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
-        .padding(10)
-        .background(Color(.systemGray6))
-        .cornerRadius(10)
         .padding(.horizontal)
-        .padding(.vertical, 8)
-        .zIndex(1) // Ensures search bar animates over other content
-        .transition(.move(edge: .top).combined(with: .opacity))
+        .padding(.top, 8)
+        .padding(.bottom, 4)
+        // Animates the width reduction of the search field when the button appears
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isSearchFocused)
     }
     
     private var filterView: some View {
@@ -333,13 +365,11 @@ struct CardDetailView: View {
                             Image(systemName: "line.3.horizontal.decrease")
                                 .font(.body)
                             
-                            // FIX APPLIED HERE:
-                            // Use a ZStack with a hidden "Favorites" text (the longest option)
-                            // to reserve fixed space and prevent layout jitter when selection changes.
+                            // Use a ZStack with a hidden "Favorites" text to reserve fixed space
                             ZStack(alignment: .leading) {
                                 Text(NoteFilter.favorites.rawValue)
                                     .font(.subheadline)
-                                    .hidden() // Invisible, strictly for layout sizing
+                                    .hidden()
                                 
                                 Text(viewModel.selectedFilter.rawValue)
                                     .font(.subheadline)
@@ -366,7 +396,6 @@ struct CardDetailView: View {
                     
                     // MARK: - Sort & Layout Menu
                     Menu {
-                        // Only show Select Items if not already editing
                         if !viewModel.isEditing && (!viewModel.filteredFileMetadata.isEmpty || !viewModel.subfolders.isEmpty) {
                              Button {
                                  playHaptic(style: .light)
@@ -424,8 +453,6 @@ struct CardDetailView: View {
                     } label: {
                         Image(systemName: viewModel.layoutStyle.rawValue == "Grid" ? "square.grid.2x2" : "list.bullet")
                             .font(.body)
-                            // FIX APPLIED HERE:
-                            // Changed minWidth to a fixed width (24) to prevent jitter if icons differ slightly in width.
                             .frame(width: 24, alignment: .center)
                     }
                     .onTapGesture {
@@ -530,7 +557,6 @@ struct CardDetailView: View {
         }
     }
     
-    // --- ADDED: Downloading Overlay ---
     private var downloadingOverlay: some View {
         ZStack {
             Color.black.opacity(0.5).ignoresSafeArea()
@@ -559,8 +585,6 @@ struct CardDetailView: View {
     private var noNotesView: some View {
         ScrollView {
             VStack {
-                // FIXED: Replaced UIScreen.main.bounds.height / 6 with a fixed spacer height
-                // to avoid "main was deprecated in iOS 16.0" warning.
                 Spacer(minLength: 150)
                 
                 if viewModel.isSearching {
@@ -669,8 +693,6 @@ struct CardDetailView: View {
             
             Spacer()
             
-            // NOTE: Order swapped to make selection indicator appear at trailing edge.
-            // When editing, the favorite icon moves to the left of the selection indicator.
             if folder.isFavorite {
                 Image(systemName: "heart.fill")
                     .foregroundColor(.red)
@@ -678,7 +700,7 @@ struct CardDetailView: View {
 
             if viewModel.isEditing {
                 listSelectionIcon(isSelected: viewModel.selectedFolders.contains(folder))
-                    .padding(.leading, 8) // Ensure separation from heart or content
+                    .padding(.leading, 8)
             }
         }
         .contentShape(Rectangle())
@@ -720,8 +742,6 @@ struct CardDetailView: View {
             
             Spacer()
             
-            // NOTE: Order swapped to make selection indicator appear at trailing edge.
-            // When editing, the favorite icon moves to the left of the selection indicator.
             if fileMetadata.isFavorite {
                 Image(systemName: "heart.fill")
                     .foregroundColor(.red)
@@ -729,7 +749,7 @@ struct CardDetailView: View {
             
             if viewModel.isEditing {
                 listSelectionIcon(isSelected: viewModel.selectedFileMetadata.contains(fileMetadata))
-                    .padding(.leading, 8) // Ensure separation from heart or content
+                    .padding(.leading, 8)
             }
         }
         .padding(.vertical, 8)
@@ -747,12 +767,10 @@ struct CardDetailView: View {
     @ViewBuilder
     private func listThumbnail(for fileMetadata: FileMetadata) -> some View {
         ZStack(alignment: .bottomTrailing) {
-            // Updated to use AsyncThumbnailView for list as well, PASSING VIEWMODEL
             AsyncThumbnailView(fileMetadata: fileMetadata, size: 44, viewModel: viewModel)
         }
     }
     
-    // Helper function for selection icon in list view
     private func listSelectionIcon(isSelected: Bool) -> some View {
         Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
             .resizable()
@@ -787,7 +805,6 @@ struct CardDetailView: View {
                         .padding(4)
                 }
             }
-            // CHANGED: Applied selectionOverlay directly to the icon container for center alignment on thumbnail
             .selectionOverlay(isSelected: viewModel.selectedFolders.contains(folder), isEditing: viewModel.isEditing)
             
             Text(folder.name)
@@ -810,10 +827,8 @@ struct CardDetailView: View {
     private func fileMetadataView(for fileMetadata: FileMetadata) -> some View {
         VStack(spacing: 4) {
             ZStack(alignment: .bottom) {
-                // REPLACED: Use AsyncThumbnailView for all file types to prevent blocking main thread, PASSING VIEWMODEL
                 AsyncThumbnailView(fileMetadata: fileMetadata, size: tileSize, viewModel: viewModel)
                 
-                // Favorite indicator
                 if fileMetadata.isFavorite {
                     Image(systemName: "heart.fill")
                         .font(.caption)
@@ -826,13 +841,11 @@ struct CardDetailView: View {
                 }
             }
             .frame(width: tileSize, height: tileSize)
-            // CHANGED: Applied selectionOverlay directly to the thumbnail container for center alignment on thumbnail
             .selectionOverlay(
                 isSelected: viewModel.selectedFileMetadata.contains(fileMetadata),
                 isEditing: viewModel.isEditing
             )
             
-            // Show file name ONLY if it's not an image with a placeholder name.
             if fileMetadata.fileType != .image || !isPlaceholderImageName(fileMetadata.fileName) {
                  Text((fileMetadata.fileName as NSString).deletingPathExtension)
                     .font(.caption)
@@ -840,7 +853,6 @@ struct CardDetailView: View {
                     .lineLimit(1)
             }
             
-            // Show formatted date for all files
             Text(fileMetadata.createdDate.formattedAsString(format: "dd/MM/yy"))
                 .font(.caption2)
                 .foregroundColor(.secondary)
@@ -860,13 +872,11 @@ struct CardDetailView: View {
             return
         }
         
-        // File is not local, start download
         if let fileURL = fileMetadata.getFileURL(),
            !FileManager.default.fileExists(atPath: fileURL.path) {
             playNavigationHaptic()
             viewModel.startDownload(for: fileMetadata)
         } else if let fileURL = fileMetadata.getFileURL() {
-            // File is local, open it
             playNavigationHaptic()
             viewModel.documentToPreview = PreviewableDocument(url: fileURL)
         }
@@ -928,7 +938,6 @@ struct CardDetailView: View {
             }
         }
         
-        // ADDED: Delete button for files
         Button(role: .destructive) {
             playHaptic(style: .light)
             viewModel.promptForDelete(item: fileMetadata)
@@ -939,7 +948,6 @@ struct CardDetailView: View {
     
     private var addButton: some View {
         Menu {
-            // Only allow creating folders at the root level for now
             if viewModel.currentFolder == nil {
                  Button("New Folder", systemImage: "folder.badge.plus") {
                      playHaptic(style: .light)
@@ -965,10 +973,8 @@ struct CardDetailView: View {
                 .frame(width: 60, height: 60)
                 .background(
                     ZStack {
-                        // Base frosted glass
                         Circle().fill(.ultraThinMaterial)
                         
-                        // Subtle tint to give the glass a hue
                         Circle().fill(
                             LinearGradient(
                                 colors: [Color.white.opacity(0.08), Color.blue.opacity(0.10)],
@@ -977,7 +983,6 @@ struct CardDetailView: View {
                             )
                         )
                         
-                        // Inner highlight (specular)
                         Circle()
                             .stroke(
                                 LinearGradient(
@@ -990,17 +995,14 @@ struct CardDetailView: View {
                             .blur(radius: 0.5)
                             .blendMode(.plusLighter)
                         
-                        // Inner shadow ring to add depth
                         Circle()
                             .stroke(Color.black.opacity(0.15), lineWidth: 1)
                             .blur(radius: 1.2)
                             .opacity(0.6)
                     }
-                    // CHANGED: ADDED matchedGeometryEffect for transformation
                     .matchedGeometryEffect(id: "background", in: animationNamespace)
                 )
                 .overlay(
-                    // Glass rim
                     Circle()
                         .stroke(
                             LinearGradient(
@@ -1024,14 +1026,11 @@ struct CardDetailView: View {
                 }
         }
         .padding()
-        // CHANGED: REMOVED .transition(.scale.combined(with: .opacity))
         .frame(maxWidth: .infinity, alignment: .bottomTrailing)
     }
     
-    // MARK: - Bottom Bar (with option of select all, delete , share and move)
     private var editingBottomBar: some View {
-        HStack(alignment: .center) { // Align items vertically center
-            // Select All / Deselect All
+        HStack(alignment: .center) {
             Button(viewModel.allVisibleItemsSelected ? "Deselect All" : "Select All") {
                 playNavigationHaptic()
                 viewModel.toggleSelectAllItems()
@@ -1043,7 +1042,6 @@ struct CardDetailView: View {
 
             Spacer()
 
-            // Share Button
             Button {
                 playNavigationHaptic()
                 viewModel.shareSelectedFiles()
@@ -1056,7 +1054,6 @@ struct CardDetailView: View {
 
             Spacer()
 
-            // Move Button
             Button {
                 playNavigationHaptic()
                 viewModel.showFolderPickerForSelection()
@@ -1069,7 +1066,6 @@ struct CardDetailView: View {
 
             Spacer()
 
-            // Delete Button
             Button {
                 playNavigationHaptic()
                 viewModel.isShowingMultiDeleteAlert = true
@@ -1079,7 +1075,6 @@ struct CardDetailView: View {
                         .font(.title3)
                         .foregroundColor(viewModel.selectedItemCount > 0 ? .red : .gray)
                     
-                    // Show count only if > 0, make it smaller
                     if viewModel.selectedItemCount > 0 {
                         Text("\(viewModel.selectedItemCount)")
                             .font(.system(size: 10, weight: .bold))
@@ -1088,20 +1083,18 @@ struct CardDetailView: View {
                             .transition(.scale.combined(with: .opacity))
                     }
                 }
-                .frame(width: 44, height: 44) // Make touch target larger
+                .frame(width: 44, height: 44)
             }
             .padding(.trailing)
             .disabled(viewModel.selectedItemCount == 0)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 4)
-        // CHANGED: Refactored background to use matchedGeometryEffect and Removed transition
         .background(
             Capsule()
                 .fill(.thinMaterial)
                 .matchedGeometryEffect(id: "background", in: animationNamespace)
         )
-        // .clipShape(Capsule()) // Removed as background is already a capsule shape
         .padding(.horizontal)
         .padding(.bottom, 8)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.selectedItemCount)
@@ -1110,8 +1103,6 @@ struct CardDetailView: View {
     private var deleteAlertContent: some View {
         Button("Delete", role: .destructive) {
             playDeleteSound()
-            // Updated to handle escaping closure with Task.detached or similar is not needed
-            // because deleteSubject handles the async work internally but accepts a closure.
             viewModel.deleteSubject {
                 dismiss()
             }
@@ -1141,7 +1132,6 @@ struct CardDetailView: View {
         generator.impactOccurred()
     }
     
-    // Helper function for haptics
     private func playHaptic(style: UIImpactFeedbackGenerator.FeedbackStyle) {
         let generator = UIImpactFeedbackGenerator(style: style)
         generator.impactOccurred()
@@ -1183,8 +1173,10 @@ struct PreviewWithShareView: View {
                         .foregroundStyle(.white)
                         .bold()
                         .padding(12)
+                        // UPDATED: Use your custom .glassEffect()
                         .background {
                             Circle()
+                                .fill(.clear)
                                 .glassEffect()
                         }
                 }
@@ -1192,14 +1184,12 @@ struct PreviewWithShareView: View {
                 .padding(.trailing, 4)
             }
         }
-        // This modifier prevents the sheet from being dismissed by swiping down
         .interactiveDismissDisabled()
         .sheet(isPresented: $isShowingShareSheet) {
             ShareSheetView(activityItems: [document.url])
         }
     }
     
-    // Helper function for haptics
     private func playHaptic(style: UIImpactFeedbackGenerator.FeedbackStyle) {
         let generator = UIImpactFeedbackGenerator(style: style)
         generator.impactOccurred()
@@ -1247,10 +1237,8 @@ struct FilesFolderIcon: View {
     var size: CGFloat
 
     var body: some View {
-        // Size the icon slightly smaller than the tile
         let iconSize = size * 0.62
         ZStack {
-            // Base filled folder with a blue gradient, similar to Files app
             Image(systemName: "folder.fill")
                 .resizable()
                 .aspectRatio(contentMode: .fit)
@@ -1259,8 +1247,8 @@ struct FilesFolderIcon: View {
                 .foregroundStyle(
                     LinearGradient(
                         colors: [
-                            Color(red: 0.74, green: 0.86, blue: 1.0), // light blue top
-                            Color(red: 0.20, green: 0.56, blue: 1.0)  // deeper blue bottom
+                            Color(red: 0.74, green: 0.86, blue: 1.0),
+                            Color(red: 0.20, green: 0.56, blue: 1.0)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -1268,7 +1256,6 @@ struct FilesFolderIcon: View {
                 )
                 .shadow(color: Color.blue.opacity(0.25), radius: 6, x: 0, y: 3)
 
-            // Subtle top highlight to give a modern glossy feel
             Image(systemName: "folder.fill")
                 .resizable()
                 .aspectRatio(contentMode: .fit)
@@ -1294,35 +1281,27 @@ struct SelectionOverlay: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            // 1. Independent Scale for the icon/content
             .scaleEffect(isEditing && isSelected ? 0.92 : 1.0)
             .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isSelected)
             .opacity(isEditing && isSelected ? 0.7 : 1.0)
-            
-            // 2. Selection Indicator (Centered)
             .overlay(alignment: .center) {
                 if isEditing {
                     ZStack {
-                        // Background: Only visible when selected to fill the checkmark tick with white.
-                        // Hidden when unselected so the ring remains truly hollow.
                         Circle()
                             .fill(.white)
-                            .frame(width: 20, height: 20) // Slightly smaller so it fits inside the blue fill
+                            .frame(width: 20, height: 20)
                             .opacity(isSelected ? 1.0 : 0.0)
                         
-                        // The Icon: Morphs from Hollow Ring (White) -> Filled Checkmark (Blue)
                         Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                             .resizable()
                             .scaledToFit()
-                            .frame(width: 28, height: 28) // Standard touch-friendly size
+                            .frame(width: 28, height: 28)
                             .foregroundStyle(isSelected ? Color.blue : Color.white)
-                            .contentTransition(.symbolEffect(.replace)) // The Magic Morph
-                            // Shadow to make the white ring "clearly visible" on light images
+                            .contentTransition(.symbolEffect(.replace))
                             .shadow(color: .black.opacity(0.2), radius: 1.5, x: 0, y: 1)
                     }
                 }
             }
-            // General animation for entering/exiting edit mode
             .animation(.easeInOut(duration: 0.2), value: isEditing)
     }
 }
@@ -1491,3 +1470,5 @@ private func isPlaceholderImageName(_ fileName: String) -> Bool {
 
     return false
 }
+
+
