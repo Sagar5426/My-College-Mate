@@ -306,7 +306,7 @@ struct CardDetailView: View {
             // UPDATED: Use your custom .glassEffect()
             .background {
                 Capsule()
-                    .fill(.clear) // Ensure shape is transparent for glass background to show
+                    .fill(.clear)
                     .glassEffect()
             }
             .overlay(
@@ -328,10 +328,9 @@ struct CardDetailView: View {
                         .font(.body.weight(.bold))
                         .foregroundStyle(.white)
                         .padding(10)
-                        // UPDATED: Use your custom .glassEffect() on Circle
                         .background {
                             Circle()
-                                .fill(.clear) // Ensure shape is transparent for glass background to show
+                                .fill(Color.clear)
                                 .glassEffect()
                         }
                         .overlay(
@@ -1173,10 +1172,8 @@ struct PreviewWithShareView: View {
                         .foregroundStyle(.white)
                         .bold()
                         .padding(12)
-                        // UPDATED: Use your custom .glassEffect()
                         .background {
                             Circle()
-                                .fill(.clear)
                                 .glassEffect()
                         }
                 }
