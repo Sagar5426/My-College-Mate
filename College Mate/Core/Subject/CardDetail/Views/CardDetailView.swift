@@ -284,9 +284,7 @@ struct CardDetailView: View {
     }
     
     private var searchBarView: some View {
-        
         HStack(spacing: 12) {
-
             // Search Field
             HStack {
                 Image(systemName: "magnifyingglass")
@@ -477,14 +475,24 @@ struct CardDetailView: View {
                     HStack(spacing: 8) {
                         if viewModel.isSearching {
                             HStack {
-                                Image(systemName: "magnifyingglass")
-                                Text("Search Results for \"\(viewModel.searchText)\"")
+                                Image(systemName: "text.page.badge.magnifyingglass")
+                                    .font(.body)
+                                HStack(spacing: 0) {
+                                    Text("Name Contains \"")
+                                        .foregroundStyle(.secondary)
+
+                                    Text(viewModel.searchText)
+
+                                    Text("\"")
+                                        .foregroundStyle(.secondary)
+                                }
+
+
                             }
-                            .font(.caption)
+                            .font(.callout)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
-                            .background(Color.blue.opacity(0.2))
-                            .foregroundColor(.blue)
+                            .foregroundStyle(.white)
                             .clipShape(Capsule())
                         } else {
                             Button(action: {
