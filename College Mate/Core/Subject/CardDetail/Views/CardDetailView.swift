@@ -799,23 +799,22 @@ struct CardDetailView: View {
     private func folderView(for folder: Folder) -> some View {
         VStack {
             ZStack {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.blue.opacity(0.1))
-                    .frame(width: tileSize, height: tileSize * 0.75)
-                
                 FilesFolderIcon(size: tileSize)
-                
+
                 if folder.isFavorite {
                     Image(systemName: "heart.fill")
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundColor(.red)
                         .padding(3)
                         .background(.thinMaterial)
                         .clipShape(Circle())
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                        .padding(4)
+                        .offset(y: 3)
                 }
             }
+            .frame(width: tileSize * 0.62, height: tileSize * 0.62)
+
+
+
             .selectionOverlay(isSelected: viewModel.selectedFolders.contains(folder), isEditing: viewModel.isEditing)
             
             Text(folder.name)
@@ -1253,42 +1252,16 @@ struct FilesFolderIcon: View {
     var size: CGFloat
 
     var body: some View {
-        let iconSize = size * 0.62
-        ZStack {
-            Image(systemName: "folder.fill")
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: iconSize, height: iconSize)
-                .symbolRenderingMode(.monochrome)
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [
-                            Color(red: 0.74, green: 0.86, blue: 1.0),
-                            Color(red: 0.20, green: 0.56, blue: 1.0)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .shadow(color: Color.blue.opacity(0.25), radius: 6, x: 0, y: 3)
-
-            Image(systemName: "folder.fill")
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: iconSize, height: iconSize)
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [Color.white.opacity(0.45), Color.white.opacity(0.15), Color.clear],
-                        startPoint: .top,
-                        endPoint: .center
-                    )
-                )
-                .blendMode(.plusLighter)
-                .opacity(0.8)
-        }
-        .accessibilityHidden(true)
+        Image(systemName: "folder.fill")
+            .resizable()
+            .aspectRatio(contentMode: .fit)
+            .frame(width: size * 0.75, height: size * 0.75)
+            .symbolRenderingMode(.monochrome)
+            .foregroundStyle(Color.cyan.gradient)
+            .accessibilityHidden(true)
     }
 }
+
 
 // MARK: - SelectionOverlay
 struct SelectionOverlay: ViewModifier {
