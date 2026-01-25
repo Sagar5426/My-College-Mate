@@ -15,6 +15,8 @@ struct CardDetailView: View {
     @StateObject private var viewModel: CardDetailViewModel
     @FocusState private var isSearchFocused: Bool
     
+    private let searchBarHeight: CGFloat = 44
+    
     @State private var isShowingRenameFolderAlert: Bool = false
     @State private var folderBeingRenamed: Folder? = nil
     @State private var newFolderNameForRename: String = ""
@@ -27,6 +29,7 @@ struct CardDetailView: View {
     private var tileSize: CGFloat { isPad ? 120 : 80 }
     private var gridSpacing: CGFloat { isPad ? 16 : 12 }
     private var gridColumns: [GridItem] {
+        
         if isPad {
             return [GridItem(.adaptive(minimum: tileSize), spacing: gridSpacing)]
         } else {
@@ -212,7 +215,8 @@ struct CardDetailView: View {
                 }
             }
             // Animate changes to navigation bar visibility
-            .animation(.easeInOut(duration: 0.3), value: isSearchFocused)
+            .animation(.spring(response: 0.45, dampingFraction: 0.85), value: isSearchFocused)
+
     }
     
     // MARK: - Subviews
@@ -280,73 +284,73 @@ struct CardDetailView: View {
     }
     
     private var searchBarView: some View {
+        
         HStack(spacing: 12) {
-            // Glass Search Field
+
+            // Search Field
             HStack {
                 Image(systemName: "magnifyingglass")
                     .foregroundColor(.secondary)
-                
+
                 TextField("Search in \(viewModel.subject.name)...", text: $viewModel.searchText)
                     .focused($isSearchFocused)
                     .onSubmit { viewModel.performSearch() }
                     .onChange(of: viewModel.searchText) { viewModel.performSearch() }
-                
-                // Internal Clear Button
+
                 if !viewModel.searchText.isEmpty {
-                    Button(action: {
+                    Button {
                         viewModel.searchText = ""
-                    }) {
+                    } label: {
                         Image(systemName: "multiply.circle.fill")
                             .foregroundColor(.secondary)
                     }
                 }
             }
-            .padding(.vertical, 10)
             .padding(.horizontal, 12)
-            // UPDATED: Use your custom .glassEffect()
+            .frame(height: searchBarHeight)               // ✅ key line
             .background {
                 Capsule()
                     .fill(.clear)
                     .glassEffect()
             }
-            .overlay(
+            .overlay {
                 Capsule()
                     .stroke(Color.white.opacity(0.3), lineWidth: 1)
-            )
-            .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
-            
-            // "X mark button" on the right side
-            // Appears when search is focused
+            }
+            .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
+
+            // X Mark Button
             if isSearchFocused {
-                Button(action: {
+                Button {
                     playHaptic(style: .light)
-                    // Clear text AND Dismiss Keyboard
                     viewModel.searchText = ""
                     isSearchFocused = false
-                }) {
+                } label: {
                     Image(systemName: "xmark")
-                        .font(.body.weight(.bold))
+                        .font(.system(size: 16, weight: .bold))
                         .foregroundStyle(.white)
-                        .padding(10)
+                        .frame(width: searchBarHeight, height: searchBarHeight) // ✅ same height
                         .background {
                             Circle()
-                                .fill(Color.clear)
+                                .fill(.clear)
                                 .glassEffect()
                         }
-                        .overlay(
+                        .overlay {
                             Circle()
                                 .stroke(Color.white.opacity(0.3), lineWidth: 1)
-                        )
+                        }
                 }
-                .transition(.move(edge: .trailing).combined(with: .opacity))
+                .transition(.opacity.combined(with: .scale(scale: 0.9)))
             }
         }
         .padding(.horizontal)
         .padding(.top, 8)
         .padding(.bottom, 4)
-        // Animates the width reduction of the search field when the button appears
-        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isSearchFocused)
+        .offset(y: isSearchFocused ? -6 : 0)
+        .animation(.spring(response: 0.45, dampingFraction: 0.85), value: isSearchFocused)
+
     }
+
     
     private var filterView: some View {
             VStack(alignment: .leading, spacing: gridSpacing) {
@@ -1029,7 +1033,9 @@ struct CardDetailView: View {
     }
     
     private var editingBottomBar: some View {
+        
         HStack(alignment: .center) {
+            
             Button(viewModel.allVisibleItemsSelected ? "Deselect All" : "Select All") {
                 playNavigationHaptic()
                 viewModel.toggleSelectAllItems()
@@ -1040,6 +1046,7 @@ struct CardDetailView: View {
             .foregroundColor((viewModel.filteredFileMetadata.isEmpty && viewModel.subfolders.isEmpty) ? .gray : .blue)
 
             Spacer()
+            
 
             Button {
                 playNavigationHaptic()
@@ -1048,6 +1055,7 @@ struct CardDetailView: View {
                 Image(systemName: "square.and.arrow.up")
                     .font(.title3)
                     .frame(width: 44, height: 44)
+
             }
             .disabled(viewModel.selectedItemCount == 0)
 
@@ -1143,6 +1151,7 @@ struct PreviewWithShareView: View {
     let onDismiss: () -> Void
     
     @State private var isShowingShareSheet = false
+    @State private var bounceTrigger = 0
     
     var body: some View {
         NavigationView {
@@ -1154,9 +1163,11 @@ struct PreviewWithShareView: View {
                             Button(action: {
                                 playHaptic(style: .light)
                                 isShowingShareSheet = true
+                                bounceTrigger += 1
                             }) {
                                 Image(systemName: "square.and.arrow.up")
                                     .foregroundStyle(.white)
+                                    .symbolEffect(.wiggle, options: .nonRepeating, value: bounceTrigger)
                             }
                         }
                         ToolbarItem(placement: .bottomBar) {
