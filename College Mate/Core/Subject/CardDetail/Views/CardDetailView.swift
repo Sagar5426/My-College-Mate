@@ -474,11 +474,11 @@ struct CardDetailView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         if viewModel.isSearching {
-                            HStack {
-                                Image(systemName: "text.page.badge.magnifyingglass")
-                                    .font(.body)
+                            
                                 HStack(spacing: 0) {
-                                    Text("Name Contains \"")
+                                    Image(systemName: "text.page.badge.magnifyingglass")
+                                        .font(.body)
+                                    Text("  Name Contains \"")
                                         .foregroundStyle(.secondary)
 
                                     Text(viewModel.searchText)
@@ -487,13 +487,12 @@ struct CardDetailView: View {
                                         .foregroundStyle(.secondary)
                                 }
 
-
-                            }
                             .font(.callout)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
                             .foregroundStyle(.white)
                             .clipShape(Capsule())
+                            .offset(x: -10, y: -5)
                         } else {
                             Button(action: {
                                 playNavigationHaptic()
