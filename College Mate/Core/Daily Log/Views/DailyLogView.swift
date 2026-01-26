@@ -326,22 +326,24 @@ struct ClassesList: View {
         ZStack(alignment: .top) {
             if viewModel.isHoliday {
                 VStack(spacing: 10) {
-                    Image(systemName: "sun.max.fill")
-                        .font(.largeTitle)
-                        .foregroundStyle(.orange)
+                    LottieHelperView(size: .init(width: 250, height: 250))
                     Text("Enjoy your holiday!")
-                        .font(.subheadline)
+                        .font(.headline)
                         .foregroundColor(.gray)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 50)
                 
             } else if viewModel.dailyClasses.isEmpty {
-                Text("No classes scheduled for this day.")
-                    .font(.subheadline)
-                    .foregroundColor(.gray)
-                    .frame(maxWidth: .infinity)
-                    .padding()
+                VStack(spacing: 0) {
+                    LottieHelperView(fileName: "Calendar.json", size: .init(width: 200, height: 200), animationScale: 2)
+                    Text("No classes scheduled for this day.")
+                        .font(.headline)
+                        .foregroundColor(.gray)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .offset(y: -35)
+                }
             } else {
                 VStack(alignment: .leading, spacing: 20) {
                     ForEach(viewModel.dailyClasses) { item in

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		4527249E2F27CEB100CDD51F /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = 4527249D2F27CEB100CDD51F /* Lottie */; };
 		452B61142E76926B00E655B1 /* ShareToCollegeMate.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 452B610A2E76926B00E655B1 /* ShareToCollegeMate.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		45C1DB152EB90B1A00AF1E5C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 45C1DADE2EB90B1A00AF1E5C /* Assets.xcassets */; };
 		45C1DB172EB90B1A00AF1E5C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 45C1DADE2EB90B1A00AF1E5C /* Assets.xcassets */; };
@@ -119,6 +120,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				45C5A75D2E599E580025FC0B /* Mantis in Frameworks */,
+				4527249E2F27CEB100CDD51F /* Lottie in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -190,6 +192,7 @@
 			name = "My College Mate";
 			packageProductDependencies = (
 				45C5A75C2E599E580025FC0B /* Mantis */,
+				4527249D2F27CEB100CDD51F /* Lottie */,
 			);
 			productName = "College Mate";
 			productReference = 452D1A5C2D283ED7006E2FAA /* My College Mate.app */;
@@ -225,6 +228,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				45C5A75B2E599E580025FC0B /* XCRemoteSwiftPackageReference "Mantis" */,
+				4527249C2F27CEB000CDD51F /* XCRemoteSwiftPackageReference "lottie-ios" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 452D1A5D2D283ED7006E2FAA /* Products */;
@@ -601,6 +605,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		4527249C2F27CEB000CDD51F /* XCRemoteSwiftPackageReference "lottie-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/airbnb/lottie-ios";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 4.6.0;
+			};
+		};
 		45C5A75B2E599E580025FC0B /* XCRemoteSwiftPackageReference "Mantis" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/guoyingtao/Mantis.git";
@@ -612,6 +624,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		4527249D2F27CEB100CDD51F /* Lottie */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4527249C2F27CEB000CDD51F /* XCRemoteSwiftPackageReference "lottie-ios" */;
+			productName = Lottie;
+		};
 		45C5A75C2E599E580025FC0B /* Mantis */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 45C5A75B2E599E580025FC0B /* XCRemoteSwiftPackageReference "Mantis" */;

@@ -53,10 +53,19 @@ struct TimeTableView: View {
                     Section {
                         // Show an empty state message if no subjects exist.
                         if subjects.isEmpty {
-                            ContentUnavailableView("No Subjects Yet",
-                                                   systemImage: "book.closed",
-                                                   description: Text("Add a subject to see its schedule here."))
-                                .padding(.top, 100)
+                            VStack(spacing: 0) {
+                                LottieHelperView(fileName: "noResultFound.json", size: .init(width: 250, height: 250), animationScale: 1)
+                                Label("No Subjects Yet", systemImage: "book.closed")
+                                                .font(.headline)
+                                                .foregroundColor(.white)
+                                .font(.headline)
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                Text("Add a subject to see its schedule here.")
+                                    .font(.subheadline)
+                                    .foregroundColor(.gray)
+                                    .frame(maxWidth: .infinity)
+                            }
                         } else {
                             ForEach(Day.allCases, id: \.self) { day in
                                 // The function now returns a list of identifiable `ScheduledClass` objects.
