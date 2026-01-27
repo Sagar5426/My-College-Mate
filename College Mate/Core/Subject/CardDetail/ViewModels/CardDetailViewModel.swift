@@ -558,15 +558,22 @@ class CardDetailViewModel: ObservableObject {
         availableFolders = folders
     }
     
-    func deleteSubject(onDismiss: () -> Void) {
-        let subjectID = subject.id.uuidString
-        Task {
-            await NotificationManager.shared.cancelNotifications(for: subjectID)
+    // Add @escaping here
+        func deleteSubject(onDismiss: @escaping () -> Void) {
+            let subjectToDelete = subject
+            
+            Task {
+                // Cancel notifications using the subject object
+                await NotificationManager.shared.cancelNotifications(for: subjectToDelete)
+                
+                // Perform deletion on the main actor after cleanup
+                await MainActor.run {
+                    FileDataService.deleteSubjectFolder(for: subjectToDelete)
+                    modelContext.delete(subjectToDelete)
+                    onDismiss()
+                }
+            }
         }
-        FileDataService.deleteSubjectFolder(for: subject)
-        modelContext.delete(subject)
-        onDismiss()
-    }
     
     func renameFile() {
         guard !newFileName.isEmpty else { return }

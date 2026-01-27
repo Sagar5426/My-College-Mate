@@ -1,10 +1,3 @@
-//
-//  NotificationManager.swift
-//  College Mate
-//
-//  Created by Sagar Jangra on 29/10/2025.
-//
-
 import Foundation
 import UserNotifications
 import SwiftData
@@ -25,179 +18,171 @@ class NotificationManager {
     private init() {}
 
     // MARK: - Authorization
-
-    /// Call this when your app first launches
     func requestAuthorization() {
         center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
-            Task { @MainActor in
-                if let error = error {
-                    print("Notification authorization error: \(error.localizedDescription)")
-                }
-                
+            if let error = error {
+                print("Notification authorization error: \(error.localizedDescription)")
             }
         }
     }
 
-    // MARK: - Scheduling
+    // MARK: - Scheduling (Discrete 14-Day Window)
 
-    /// Schedules repeating weekly notifications for all classes in a subject
+    /// Schedules discrete notifications for the next 14 days for a single subject
     func scheduleNotifications(for subject: Subject) async {
-
-        // Respect user preference
         guard notificationsEnabled else {
             await cancelNotifications(for: subject)
             return
         }
 
-        // Ensure no duplicates
+        // 1. Clear existing notifications for this subject to avoid duplicates
         await cancelNotifications(for: subject)
 
         guard let schedules = subject.schedules, !schedules.isEmpty else { return }
 
-        let subjectPrefix = subject.id.uuidString
+        // 2. Schedule for the next 14 days
         let calendar = Calendar.current
+        let today = Date()
+        
+        // Loop through next 14 days
+        for dayOffset in 0..<14 {
+            guard let targetDate = calendar.date(byAdding: .day, value: dayOffset, to: today) else { continue }
+            
+            // Generate notifications for this specific date
+            await scheduleNotifications(for: subject, on: targetDate)
+        }
+    }
+
+    /// Helper to schedule notifications for a specific date (used by the loop and by DailyLogView)
+    func scheduleNotifications(for subject: Subject, on date: Date) async {
+        guard notificationsEnabled, let schedules = subject.schedules else { return }
+        
+        let calendar = Calendar.current
+        let weekdayIndex = calendar.component(.weekday, from: date) // 1=Sun, 2=Mon...
+        let dateString = dateFormatter.string(from: date) // For unique ID
+        
+        let subjectPrefix = subject.id.uuidString
 
         for schedule in schedules {
-            guard
-                let classTimes = schedule.classTimes,
-                let weekday = dayToWeekday(schedule.day)
-            else { continue }
+            // Check if this schedule runs on this weekday
+            guard let scheduleWeekday = dayToWeekday(schedule.day),
+                  scheduleWeekday == weekdayIndex,
+                  let classTimes = schedule.classTimes else { continue }
 
             for classTime in classTimes {
                 guard let startTime = classTime.startTime else { continue }
 
                 let components = calendar.dateComponents([.hour, .minute], from: startTime)
-                guard let hour = components.hour,
-                      let minute = components.minute else { continue }
+                guard let hour = components.hour, let minute = components.minute else { continue }
 
-                // MARK: Exact Class Start Notification
-
+                // --- 1. Exact Start Notification ---
                 let exactContent = UNMutableNotificationContent()
                 exactContent.title = subject.name
                 exactContent.body = startedBody(room: classTime.roomNumber)
                 exactContent.sound = .default
 
                 var exactTriggerDate = DateComponents()
-                exactTriggerDate.weekday = weekday
+                exactTriggerDate.year = calendar.component(.year, from: date)
+                exactTriggerDate.month = calendar.component(.month, from: date)
+                exactTriggerDate.day = calendar.component(.day, from: date)
                 exactTriggerDate.hour = hour
                 exactTriggerDate.minute = minute
 
-                let exactTrigger = UNCalendarNotificationTrigger(
-                    dateMatching: exactTriggerDate,
-                    repeats: true
-                )
+                let exactTrigger = UNCalendarNotificationTrigger(dateMatching: exactTriggerDate, repeats: false)
+                
+                // ID Format: SubjectID_ClassTimeID_YYYYMMDD_Type
+                let exactIdentifier = "\(subjectPrefix)_\(classTime.id.uuidString)_\(dateString)_exact"
 
-                let exactIdentifier =
-                "\(subjectPrefix)_\(schedule.id.uuidString)_\(classTime.id.uuidString)_exact"
-
-                let exactRequest = UNNotificationRequest(
-                    identifier: exactIdentifier,
-                    content: exactContent,
-                    trigger: exactTrigger
-                )
+                let exactRequest = UNNotificationRequest(identifier: exactIdentifier, content: exactContent, trigger: exactTrigger)
 
                 do {
                     try await center.add(exactRequest)
-
-                    // MARK: Upcoming Notification (X minutes before)
-
+                    
+                    // --- 2. Upcoming Notification ---
                     let priorMinutes = notificationLeadMinutes
-                    guard priorMinutes > 0 else { continue }
-
-                    let today = Date()
-                    guard
-                        let baseDate = calendar.date(
-                            bySettingHour: hour,
-                            minute: minute,
-                            second: 0,
-                            of: today
-                        ),
-                        let shiftedDate = calendar.date(
-                            byAdding: .minute,
-                            value: -priorMinutes,
-                            to: baseDate
-                        )
-                    else { continue }
-
-                    var priorTriggerDate = DateComponents()
-                    priorTriggerDate.weekday = weekday
-
-                    // Handle day wrap (e.g. 00:05 → previous day)
-                    if !calendar.isDate(baseDate, inSameDayAs: shiftedDate) {
-                        var prevDay = weekday - 1
-                        if prevDay < 1 { prevDay = 7 }
-                        priorTriggerDate.weekday = prevDay
+                    if priorMinutes > 0 {
+                        // Calculate pre-time
+                        guard let classDate = calendar.date(from: exactTriggerDate),
+                              let preDate = calendar.date(byAdding: .minute, value: -priorMinutes, to: classDate) else { continue }
+                        
+                        let preTriggerComponents = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: preDate)
+                        
+                        let preContent = UNMutableNotificationContent()
+                        preContent.title = subject.name
+                        preContent.body = upcomingBody(room: classTime.roomNumber, minutes: priorMinutes)
+                        preContent.sound = .default
+                        
+                        let preTrigger = UNCalendarNotificationTrigger(dateMatching: preTriggerComponents, repeats: false)
+                        let preIdentifier = "\(subjectPrefix)_\(classTime.id.uuidString)_\(dateString)_pre"
+                        
+                        let preRequest = UNNotificationRequest(identifier: preIdentifier, content: preContent, trigger: preTrigger)
+                        try await center.add(preRequest)
                     }
-
-                    let shiftedComponents = calendar.dateComponents([.hour, .minute], from: shiftedDate)
-                    priorTriggerDate.hour = shiftedComponents.hour
-                    priorTriggerDate.minute = shiftedComponents.minute
-
-                    let preContent = UNMutableNotificationContent()
-                    preContent.title = subject.name
-                    preContent.body = upcomingBody(
-                        room: classTime.roomNumber,
-                        minutes: priorMinutes
-                    )
-                    preContent.sound = .default
-
-                    let preTrigger = UNCalendarNotificationTrigger(
-                        dateMatching: priorTriggerDate,
-                        repeats: true
-                    )
-
-                    let preIdentifier =
-                    "\(subjectPrefix)_\(schedule.id.uuidString)_\(classTime.id.uuidString)_pre"
-
-                    let preRequest = UNNotificationRequest(
-                        identifier: preIdentifier,
-                        content: preContent,
-                        trigger: preTrigger
-                    )
-
-                    try await center.add(preRequest)
-
+                    
                 } catch {
-                    print("Failed to schedule notification: \(error.localizedDescription)")
+                    print("Failed to schedule: \(error)")
                 }
             }
         }
     }
 
-    // MARK: - Cancellation
+    // MARK: - Cancellation Logic
 
+    /// Cancel all notifications for a subject
     func cancelNotifications(for subject: Subject) async {
-        await cancelNotifications(for: subject.id.uuidString)
+        await cancelNotifications(prefix: subject.id.uuidString)
     }
 
-    func cancelNotifications(for subjectID: String) async {
+    /// Cancel notifications specifically for a certain date (used when marking Holiday)
+    func cancelNotifications(on date: Date) async {
+        let dateString = dateFormatter.string(from: date)
         let pending = await center.pendingNotificationRequests()
-        let identifiers = pending
-            .map(\.identifier)
-            .filter { $0.hasPrefix(subjectID) }
-
+        
+        // Filter IDs that contain the date string (e.g. "_20251027_")
+        let idsToRemove = pending.map(\.identifier).filter { $0.contains("_\(dateString)_") }
+        
+        if !idsToRemove.isEmpty {
+            center.removePendingNotificationRequests(withIdentifiers: idsToRemove)
+            print("Cancelled \(idsToRemove.count) notifications for holiday on \(dateString)")
+        }
+    }
+    
+    // Internal helper for cancelling by ID prefix
+    private func cancelNotifications(prefix: String) async {
+        let pending = await center.pendingNotificationRequests()
+        let identifiers = pending.map(\.identifier).filter { $0.hasPrefix(prefix) }
         if !identifiers.isEmpty {
             center.removePendingNotificationRequests(withIdentifiers: identifiers)
         }
     }
 
+    // MARK: - Rescheduling Helper
+    
+    /// Reschedule notifications for a list of subjects on a specific date (used when un-marking Holiday)
+    func rescheduleNotifications(for subjects: [Subject], on date: Date) async {
+        for subject in subjects {
+            await scheduleNotifications(for: subject, on: date)
+        }
+    }
+
     // MARK: - Helpers
 
+    private let dateFormatter: DateFormatter = {
+        let df = DateFormatter()
+        df.dateFormat = "yyyyMMdd"
+        return df
+    }()
+
     private func startedBody(room: String?) -> String {
-        guard let room, !room.isEmpty else {
-            return "📚 Class has started."
-        }
+        guard let room, !room.isEmpty else { return "📚 Class has started." }
         return "📚 Head to Room \(room) — class has started."
     }
 
     private func upcomingBody(room: String?, minutes: Int) -> String {
-        guard let room, !room.isEmpty else {
-            return "⏰ Class starts in \(minutes) minutes."
-        }
+        guard let room, !room.isEmpty else { return "⏰ Class starts in \(minutes) minutes." }
         return "⏰ Head to Room \(room) in \(minutes) minutes."
     }
 
-    /// Converts weekday string to Calendar weekday (1 = Sunday)
     private func dayToWeekday(_ day: String) -> Int? {
         switch day.lowercased() {
         case "sunday": return 1

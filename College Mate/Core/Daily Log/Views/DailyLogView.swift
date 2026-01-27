@@ -293,21 +293,46 @@ struct ControlPanelView: View {
                 Button(action: {
                     let generator = UIImpactFeedbackGenerator(style: .medium)
                     generator.impactOccurred()
+                                
+                    // 1. Toggle the holiday state in the model
                     withAnimation {
                         viewModel.toggleHoliday()
                     }
-                }) {
-                    Text(viewModel.isHoliday ? "Marked as Holiday" : "Mark Today as Holiday")
-                        .fontWeight(.semibold)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(viewModel.isHoliday ? .orange.opacity(0.8) : .gray.opacity(0.2))
-                        .foregroundStyle(.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                }
-                .buttonStyle(.plain)
-                .transition(.move(edge: .top).combined(with: .opacity))
-            }
+                                
+                    // 2. Handle Notifications
+                    Task {
+                        if viewModel.isHoliday {
+                            // If user MARKED as holiday, cancel notifications for this specific date
+                                        await NotificationManager.shared.cancelNotifications(on: viewModel.selectedDate)
+                                    } else {
+                                        // If user UNMARKED holiday, check current subjects and restore notifications for this date
+                                        // We need access to the subjects list.
+                                        // Since `ControlPanelView` doesn't have direct access to `subjects` query,
+                                        // we rely on `viewModel` or pass it down.
+                                        
+                                        // Simplest fix: Re-schedule based on the `dailyClasses` the view model already knows about,
+                                        // OR ideally, pass the full subject list if needed.
+                                        // Assuming `viewModel.dailyClasses` contains enough info,
+                                        // but actually NotificationManager needs the `Subject` object.
+                                        
+                                        // Strategy: Map the unique subjects from the daily classes
+                                        let uniqueSubjects = Array(Set(viewModel.dailyClasses.map { $0.subject }))
+                                        await NotificationManager.shared.rescheduleNotifications(for: uniqueSubjects, on: viewModel.selectedDate)
+                                    }
+                                }
+                                
+                            }) {
+                                Text(viewModel.isHoliday ? "Marked as Holiday" : "Mark Today as Holiday")
+                                    .fontWeight(.semibold)
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
+                                    .background(viewModel.isHoliday ? .orange.opacity(0.8) : .gray.opacity(0.2))
+                                    .foregroundStyle(.white)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                            }
+                            .buttonStyle(.plain)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                        }
         }
         .padding()
         .background(.ultraThinMaterial)
