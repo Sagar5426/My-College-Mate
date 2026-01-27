@@ -33,9 +33,23 @@ class ShareViewController: UIViewController {
 
         // Embed the SwiftUI view within a UIHostingController.
         let hostingController = UIHostingController(rootView: shareView)
-        hostingController.view.frame = self.view.bounds
-        self.view.addSubview(hostingController.view)
-        self.addChild(hostingController)
-        hostingController.didMove(toParent: self)
+                
+                // 1. Add the hosting controller as a child
+                self.addChild(hostingController)
+                self.view.addSubview(hostingController.view)
+                
+                // 2. ENABLE AUTO LAYOUT (Crucial for iPad)
+                hostingController.view.translatesAutoresizingMaskIntoConstraints = false
+                
+                // 3. PIN EDGES TO PARENT VIEW
+                NSLayoutConstraint.activate([
+                    hostingController.view.topAnchor.constraint(equalTo: self.view.topAnchor),
+                    hostingController.view.bottomAnchor.constraint(equalTo: self.view.bottomAnchor),
+                    hostingController.view.leadingAnchor.constraint(equalTo: self.view.leadingAnchor),
+                    hostingController.view.trailingAnchor.constraint(equalTo: self.view.trailingAnchor)
+                ])
+                
+                // 4. Notify child moved
+                hostingController.didMove(toParent: self)
     }
 }

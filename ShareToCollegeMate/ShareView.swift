@@ -38,7 +38,7 @@ struct ShareView: View {
     }
 
     var body: some View {
-        VStack {
+        VStack(spacing: 0) {
             if let errorMessage = errorMessage {
                 Text(errorMessage)
                     .foregroundColor(.red)
@@ -91,6 +91,8 @@ struct ShareView: View {
                         }
                     }
                 }
+                .navigationViewStyle(.stack)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
 
             if isSaving {
@@ -102,7 +104,9 @@ struct ShareView: View {
                         .foregroundColor(.secondary)
                         .padding(.top, 8)
                 }
+                .frame(maxWidth: .infinity)
                 .padding()
+                .background(Color(.systemBackground))
             }
 
             if errorMessage == nil && subjects.isEmpty && modelContainer != nil {
