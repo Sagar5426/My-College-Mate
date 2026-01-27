@@ -73,14 +73,32 @@ class DailyLogViewModel: ObservableObject {
         
         // Update all classes in the current view
         for item in dailyClasses {
+            // 1. Update the holiday flag
             item.record.isHoliday = newHolidayState
             
+            // 2. Handle Logic for Marking as Holiday
             if newHolidayState {
+                
+                // Check if this specific class is currently marked (Present/Absent)
+                let wasMarked = (item.record.status == "Attended" || item.record.status == "Not Attended")
+                
+                // Generate specific log message per subject
+                let logMessage = wasMarked
+                    ? "Marked as Holiday. Attendance reverted."
+                    : "Marked as Holiday"
+                
                 if item.record.status != "Canceled" {
-                    updateAttendance(for: item.record, in: item.subject, to: "Canceled")
+                    // Update status to Canceled and pass the specific log message
+                    updateAttendance(for: item.record, in: item.subject, to: "Canceled", customLogMessage: logMessage)
+                } else {
+                    // If status is ALREADY "Canceled", updateAttendance won't run.
+                    // We must manually add the log so the user knows the holiday was marked.
+                    let log = AttendanceLogEntry(timestamp: Date(), subjectName: item.subject.name, action: logMessage)
+                    item.subject.logs.append(log)
                 }
             }
         }
+        
         // Refresh to check if the day is still a holiday (it will be)
         checkHolidayStatus()
     }
@@ -122,7 +140,8 @@ class DailyLogViewModel: ObservableObject {
         }
     }
     
-    func updateAttendance(for record: AttendanceRecord, in subject: Subject, to newStatus: String) {
+    // --- Custom log message support ---
+    func updateAttendance(for record: AttendanceRecord, in subject: Subject, to newStatus: String, customLogMessage: String? = nil) {
             let oldStatus = record.status
             guard oldStatus != newStatus else { return }
 
@@ -159,7 +178,9 @@ class DailyLogViewModel: ObservableObject {
             // --- Enhanced Descriptive Logs ---
             var logAction = ""
             
-            if newStatus == "Attended" {
+            if let customMessage = customLogMessage {
+                logAction = customMessage
+            } else if newStatus == "Attended" {
                 logAction = "Marked as Present"
             } else if newStatus == "Not Attended" {
                 logAction = "Marked as Absent"

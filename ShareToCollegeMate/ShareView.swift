@@ -111,6 +111,7 @@ struct ShareView: View {
                     .padding(.top, 4)
             }
         }
+        .preferredColorScheme(.dark)
         .onAppear {
             if modelContainer == nil {
                 print("[ShareExt] ModelContainer is nil on appear.")
