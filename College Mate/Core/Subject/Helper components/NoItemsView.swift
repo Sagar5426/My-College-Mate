@@ -9,6 +9,8 @@ struct NoItemsView: View {
     
     var body: some View {
         VStack(spacing: 10) {
+            LottieHelperView(fileName: "Learning", size: .init(width: 250, height: 250), animationScale: 1.4)
+                .padding(.vertical, 10)
             Text("No Subjects Yet!")
                 .font(.title)
                 .fontWeight(.semibold)

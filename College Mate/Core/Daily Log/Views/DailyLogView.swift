@@ -344,6 +344,7 @@ struct ClassesList: View {
                         .padding()
                         .offset(y: -35)
                 }
+                .padding(.top, 100)
             } else {
                 VStack(alignment: .leading, spacing: 20) {
                     ForEach(viewModel.dailyClasses) { item in
