@@ -15,6 +15,10 @@ struct NoItemsView: View {
                 .font(.title)
                 .fontWeight(.semibold)
             
+            Text("Start organizing your subject!")
+                .padding(.bottom, 20)
+                .foregroundStyle(.secondary)
+            
             Text("Add Subject 📚")
                 .foregroundStyle(.white)
                 .font(.headline)
