@@ -100,7 +100,72 @@ struct AddSubjectButton: View {
     }
 }
 
-// Preview
-#Preview {
+// MARK: - Previews
+
+// Helper to create the container and data safely
+@MainActor
+struct PreviewContainer {
+    
+    // 1. Define the full schema to prevent crashes
+    static let schema = Schema([
+        Subject.self,
+        Attendance.self,
+        Schedule.self,
+        ClassTime.self,
+        Note.self,
+        Folder.self,
+        FileMetadata.self,
+        AttendanceRecord.self
+    ])
+    
+    // 2. Helper for Empty State
+    static var empty: ModelContainer {
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        return try! ModelContainer(for: schema, configurations: [config])
+    }
+    
+    // 3. Helper for Populated State
+    static var populated: ModelContainer {
+        let container = empty
+        
+        // Create Sample Subjects
+        let math = Subject(
+            name: "Mathematics",
+            schedules: [],
+            attendance: Attendance(totalClasses: 20, attendedClasses: 18, minimumPercentageRequirement: 75)
+        )
+        
+        let physics = Subject(
+            name: "Physics",
+            schedules: [],
+            attendance: Attendance(totalClasses: 20, attendedClasses: 12, minimumPercentageRequirement: 75)
+        )
+        
+        let chemistry = Subject(
+            name: "Chemistry",
+            schedules: [],
+            attendance: Attendance(totalClasses: 20, attendedClasses: 5, minimumPercentageRequirement: 75)
+        )
+        
+        // Insert into Context
+        container.mainContext.insert(math)
+        container.mainContext.insert(physics)
+        container.mainContext.insert(chemistry)
+        
+        return container
+    }
+}
+
+// Preview 1: Empty State (Shows "No Subjects" message)
+#Preview("Empty State") {
     SubjectsView()
+        .modelContainer(PreviewContainer.empty)
+        .preferredColorScheme(.dark)
+}
+
+// Preview 2: Populated State (Shows the list of cards)
+#Preview("Populated") {
+    SubjectsView()
+        .modelContainer(PreviewContainer.populated)
+        .preferredColorScheme(.dark)
 }

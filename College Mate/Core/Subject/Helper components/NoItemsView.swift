@@ -8,14 +8,15 @@ struct NoItemsView: View {
     let primaryAccentColor: Color = Color("primaryAccentColor")
     
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 8) {
             LottieHelperView(fileName: "Learning", size: .init(width: 250, height: 250), animationScale: 1.4)
                 .padding(.vertical, 10)
             Text("No Subjects Yet!")
                 .font(.title)
                 .fontWeight(.semibold)
+                .padding(.top, 6)
             
-            Text("Start organizing your subject!")
+            Text("Start organizing your subjects!")
                 .padding(.bottom, 20)
                 .foregroundStyle(.secondary)
             

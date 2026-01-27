@@ -61,12 +61,14 @@ struct TimeTableView: View {
                                 .font(.headline)
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
+                                .padding(.bottom,5)
                                 Text("Add a subject to see its schedule here.")
                                     .font(.subheadline)
                                     .foregroundColor(.gray)
                                     .frame(maxWidth: .infinity)
                             }
                             .multilineTextAlignment(.center)
+                            .padding(.top, 110)
                         } else {
                             ForEach(Day.allCases, id: \.self) { day in
                                 // The function now returns a list of identifiable `ScheduledClass` objects.
@@ -267,47 +269,31 @@ extension Subject {
 }
 
 // MARK: - Preview
-//#Preview {
-//    // Create a more robust preview with sample data.
-//    do {
-//        let config = ModelConfiguration(isStoredInMemoryOnly: true)
-//        let container = try ModelContainer(for: [
-//            Subject.self,
-//            Attendance.self,
-//            Schedule.self,
-//            ClassTime.self,
-//            Note.self,
-//            Folder.self,
-//            FileMetadata.self,
-//            AttendanceRecord.self
-//        ], configurations: config)
-//        
-//        // Sample Data with two classes on the same day.
-//        let mathSchedule = Schedule(day: "Monday", classTimes: [
-//            ClassTime(startTime: Date().addingTimeInterval(-3600*4), endTime: Date().addingTimeInterval(-3600*3)),
-//            ClassTime(startTime: Date().addingTimeInterval(-3600*2), endTime: Date().addingTimeInterval(-3600*1))
-//        ])
-//        // 1. Green: 80% (>= 75% req)
-//        let math = Subject(name: "Mathematics", schedules: [mathSchedule], attendance: Attendance(totalClasses: 10, attendedClasses: 8, minimumPercentageRequirement: 75.0))
-//        
-//        // 2. Yellow: 60% (between 37.5% and 75%)
-//        let physicsSchedule = Schedule(day: "Tuesday", classTimes: [ClassTime(startTime: Date().addingTimeInterval(-3600*2), endTime: Date().addingTimeInterval(-3600*1))])
-//        let physics = Subject(name: "Physics", schedules: [physicsSchedule], attendance: Attendance(totalClasses: 10, attendedClasses: 6, minimumPercentageRequirement: 75.0))
-//        
-//        // 3. Red: 30% (<= 37.5%)
-//        let chemSchedule = Schedule(day: "Monday", classTimes: [ClassTime(startTime: Date().addingTimeInterval(-3600*1), endTime: Date().addingTimeInterval(0))])
-//        let chemistry = Subject(name: "Chemistry", schedules: [chemSchedule], attendance: Attendance(totalClasses: 10, attendedClasses: 3, minimumPercentageRequirement: 75.0))
-//
-//        container.mainContext.insert(math)
-//        container.mainContext.insert(physics)
-//        container.mainContext.insert(chemistry)
-//        
-//        return TimeTableView()
-//            .modelContainer(container)
-//            .preferredColorScheme(.dark)
-//            
-//    } catch {
-//        return Text("Failed to create preview: \(error.localizedDescription)")
-//    }
-//}
+// MARK: - Empty State Preview
+// MARK: - Empty State Preview
+#Preview("Empty State") {
+    // 1. Create the configuration
+    let config = ModelConfiguration(isStoredInMemoryOnly: true)
+    
+    // 2. Define the Schema with all your models
+    let schema = Schema([
+        Subject.self,
+        Attendance.self,
+        Schedule.self,
+        ClassTime.self,
+        Note.self,
+        Folder.self,
+        FileMetadata.self,
+        AttendanceRecord.self
+    ])
+    
+    // 3. Create the container using the Schema
+    // We use try! here because if the schema is invalid, the preview *should* crash.
+    let container = try! ModelContainer(for: schema, configurations: [config])
+    
+    // 4. Return the view
+    TimeTableView()
+        .modelContainer(container)
+        .preferredColorScheme(.dark)
+}
 

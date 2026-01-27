@@ -305,17 +305,6 @@ struct ControlPanelView: View {
                             // If user MARKED as holiday, cancel notifications for this specific date
                                         await NotificationManager.shared.cancelNotifications(on: viewModel.selectedDate)
                                     } else {
-                                        // If user UNMARKED holiday, check current subjects and restore notifications for this date
-                                        // We need access to the subjects list.
-                                        // Since `ControlPanelView` doesn't have direct access to `subjects` query,
-                                        // we rely on `viewModel` or pass it down.
-                                        
-                                        // Simplest fix: Re-schedule based on the `dailyClasses` the view model already knows about,
-                                        // OR ideally, pass the full subject list if needed.
-                                        // Assuming `viewModel.dailyClasses` contains enough info,
-                                        // but actually NotificationManager needs the `Subject` object.
-                                        
-                                        // Strategy: Map the unique subjects from the daily classes
                                         let uniqueSubjects = Array(Set(viewModel.dailyClasses.map { $0.subject }))
                                         await NotificationManager.shared.rescheduleNotifications(for: uniqueSubjects, on: viewModel.selectedDate)
                                     }
@@ -520,4 +509,90 @@ struct ClassAttendanceRow: View {
         formatter.timeStyle = .short
         return formatter.string(from: date)
     }
+}
+
+// MARK: - Previews
+
+// Helper struct to manage Preview Data
+@MainActor
+struct DailyLogPreviewContainer {
+    
+    // 1. Schema Definition
+    static let schema = Schema([
+        Subject.self,
+        Attendance.self,
+        Schedule.self,
+        ClassTime.self,
+        Note.self,
+        Folder.self,
+        FileMetadata.self,
+        AttendanceRecord.self
+    ])
+    
+    // 2. Empty Container
+    static var empty: ModelContainer {
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        return try! ModelContainer(for: schema, configurations: [config])
+    }
+    
+    // 3. Populated Container (Data for TODAY)
+    static var populated: ModelContainer {
+        let container = empty
+        let context = container.mainContext
+        
+        // Dynamic Date Helpers
+        let today = Date()
+        let calendar = Calendar.current
+        
+        // Get "Monday", "Tuesday", etc. for today so it shows up in the view
+        let todayName = today.formatted(.dateTime.weekday(.wide))
+        
+        // Create Sample Times (9:00 AM - 10:00 AM)
+        let start1 = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: today)!
+        let end1 = calendar.date(bySettingHour: 10, minute: 0, second: 0, of: today)!
+        
+        // Create Sample Times (11:00 AM - 12:30 PM)
+        let start2 = calendar.date(bySettingHour: 11, minute: 0, second: 0, of: today)!
+        let end2 = calendar.date(bySettingHour: 12, minute: 30, second: 0, of: today)!
+        
+        // --- Subject 1: Math (Present) ---
+        let mathSchedule = Schedule(day: todayName, classTimes: [
+            ClassTime(startTime: start1, endTime: end1, roomNumber: "101")
+        ])
+        let math = Subject(
+            name: "Mathematics",
+            schedules: [mathSchedule],
+            attendance: Attendance(totalClasses: 20, attendedClasses: 18, minimumPercentageRequirement: 75)
+        )
+        
+        // --- Subject 2: Physics (Absent) ---
+        let physicsSchedule = Schedule(day: todayName, classTimes: [
+            ClassTime(startTime: start2, endTime: end2, roomNumber: "Lab 3")
+        ])
+        let physics = Subject(
+            name: "Physics",
+            schedules: [physicsSchedule],
+            attendance: Attendance(totalClasses: 15, attendedClasses: 5, minimumPercentageRequirement: 75)
+        )
+        
+        // Insert
+        context.insert(math)
+        context.insert(physics)
+        
+        return container
+    }
+}
+
+// MARK: - Preview 1: Empty State
+#Preview("Empty State") {
+    DailyLogView()
+        .modelContainer(DailyLogPreviewContainer.empty)
+        .preferredColorScheme(.dark)
+}
+
+// MARK: - Preview 2: Populated State
+#Preview("With Data") {
+    DailyLogView()
+        .modelContainer(DailyLogPreviewContainer.populated)
+        .preferredColorScheme(.dark)
 }
