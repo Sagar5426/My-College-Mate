@@ -356,6 +356,7 @@ struct ClassesList: View {
                         .font(.headline)
                         .foregroundColor(.gray)
                 }
+                .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 50)
                 
@@ -369,6 +370,7 @@ struct ClassesList: View {
                         .padding()
                         .offset(y: -35)
                 }
+                .multilineTextAlignment(.center)
                 .padding(.top, 100)
             } else {
                 VStack(alignment: .leading, spacing: 20) {

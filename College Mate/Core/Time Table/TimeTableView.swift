@@ -66,6 +66,7 @@ struct TimeTableView: View {
                                     .foregroundColor(.gray)
                                     .frame(maxWidth: .infinity)
                             }
+                            .multilineTextAlignment(.center)
                         } else {
                             ForEach(Day.allCases, id: \.self) { day in
                                 // The function now returns a list of identifiable `ScheduledClass` objects.
