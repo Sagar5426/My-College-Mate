@@ -184,7 +184,7 @@ struct ProfileView: View {
                         }
                     }
                     .pickerStyle(.segmented)
-                    Text("This sets how long before class you’ll receive a prior notification.")
+                    Text("Alert me this much time before class.")
                         .font(.footnote)
                         .foregroundColor(.secondary)
                 }
