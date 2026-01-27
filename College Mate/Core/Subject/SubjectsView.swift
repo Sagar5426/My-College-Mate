@@ -25,7 +25,7 @@ struct SubjectsView: View {
                         .frame(height: 60)
                     ) {
                         if subjects.isEmpty {
-                            NoItemsView(isShowingAddSubject: $isShowingAddSubject)
+                            NoSubjectsView(isShowingAddSubject: $isShowingAddSubject)
                                 .transition(AnyTransition.opacity.animation(.easeIn))
                         } else {
                             // Show list of subjects if available

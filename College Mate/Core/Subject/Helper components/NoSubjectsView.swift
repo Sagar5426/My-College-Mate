@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct NoItemsView: View {
+struct NoSubjectsView: View {
     
     @State var animate: Bool = false
     @Binding var isShowingAddSubject: Bool
@@ -16,7 +16,7 @@ struct NoItemsView: View {
                 .fontWeight(.semibold)
                 .padding(.top, 6)
             
-            Text("Start organizing your subjects!")
+            Text("Start organizing your notes & Attendance. Tap the button below!")
                 .padding(.bottom, 20)
                 .foregroundStyle(.secondary)
             
@@ -62,7 +62,7 @@ struct NoItemsView: View {
 #Preview {
     NavigationStack {
         ScrollView {
-            NoItemsView(isShowingAddSubject: .constant(true))
+            NoSubjectsView(isShowingAddSubject: .constant(true))
                 .navigationTitle("Subjects")
         }
     }
