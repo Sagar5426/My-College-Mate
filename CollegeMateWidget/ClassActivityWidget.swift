@@ -237,7 +237,7 @@ struct AttendanceButton: View {
 }
 
 // MARK: - Previews
-#Preview("Lock Screen", as: .content, using: ClassActivityAttributes(subjectName: "IOT")) {
+#Preview("Lock Screen", as: .content, using: ClassActivityAttributes(subjectName: "Internet of things")) {
     ClassActivityWidget()
 } contentStates: {
     ClassActivityAttributes.ContentState(currentRoom: "302-A", nextRoom: "D-312", startTime: Date(), endTime: Date().addingTimeInterval(3600), attendanceStatus: "Select")

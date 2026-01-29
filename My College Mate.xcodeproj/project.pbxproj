@@ -11,6 +11,7 @@
 		452725EF2F2B63DC00CDD51F /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 452725EE2F2B63DB00CDD51F /* WidgetKit.framework */; };
 		452725F12F2B63DC00CDD51F /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 452725F02F2B63DC00CDD51F /* SwiftUI.framework */; };
 		452726002F2B63DE00CDD51F /* CollegeMateWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 452725EC2F2B63DB00CDD51F /* CollegeMateWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		452726092F2BEA6800CDD51F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 45C1DADE2EB90B1A00AF1E5C /* Assets.xcassets */; };
 		452B61142E76926B00E655B1 /* ShareToCollegeMate.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 452B610A2E76926B00E655B1 /* ShareToCollegeMate.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		45C1DB152EB90B1A00AF1E5C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 45C1DADE2EB90B1A00AF1E5C /* Assets.xcassets */; };
 		45C1DB172EB90B1A00AF1E5C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 45C1DADE2EB90B1A00AF1E5C /* Assets.xcassets */; };
@@ -331,6 +332,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				452726092F2BEA6800CDD51F /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

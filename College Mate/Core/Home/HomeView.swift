@@ -17,12 +17,7 @@ struct HomeView: View {
             VStack {
                 SubjectsView()
                 
-                // TEMPORARY BUTTON TO START ACTIVITY
-                Button("Start Live Clock") {
-                    startLiveActivity()
-                }
-                .buttonStyle(.borderedProminent)
-                .padding()
+                // Button removed as requested
             }
             .tabItem {
                 Label("Subjects", systemImage: "book.closed")
@@ -45,6 +40,10 @@ struct HomeView: View {
         .tint(.cyan)
         .environment(\.colorScheme, .dark)
         .sensoryFeedback(.selection, trigger: selectedTab)
+        .onAppear {
+            // Push live activity when app is launched (HomeView appears)
+            startLiveActivity()
+        }
     }
     
     // Function to start the Live Activity
@@ -69,6 +68,11 @@ struct HomeView: View {
         let content = ActivityContent(state: state, staleDate: nil)
         
         do {
+            // Optional: End existing activities to prevent duplicates on every launch
+            // for activity in Activity<ClassActivityAttributes>.activities {
+            //    Task { await activity.end(nil, dismissalPolicy: .immediate) }
+            // }
+
             // Use the new request signature
             let activity = try Activity.request(
                 attributes: attributes,
