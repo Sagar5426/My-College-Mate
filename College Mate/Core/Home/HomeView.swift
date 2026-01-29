@@ -60,7 +60,9 @@ struct HomeView: View {
             currentRoom: "302-A",
             nextRoom: "Lab-1",
             startTime: Date(),
-            endTime: Date().addingTimeInterval(3600)
+            endTime: Date().addingTimeInterval(3600),
+            attendanceStatus: "Select"
+            
         )
         
         // FIX: Wrap the state in ActivityContent
