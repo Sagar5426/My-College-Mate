@@ -58,179 +58,31 @@ struct UpdateAttendanceIntent: LiveActivityIntent {
 struct ClassActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: ClassActivityAttributes.self) { context in
-            // MARK: - Lock Screen / Banner UI
-            VStack(spacing: 0) {
-                
-                // --- TOP ROW (Rooms & Countdown) ---
-                HStack(alignment: .top) {
-                    // Top Leading: Current Room
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Current Room")
-                            .font(.caption2)
-                            .foregroundStyle(.gray)
-                        Text(context.state.currentRoom)
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .foregroundStyle(.white)
-                    }
-                    
-                    Spacer()
-                    
-                    // Middle: Class Ends In
-                    VStack(alignment: .center, spacing: 2) {
-                        Text("Class ends in")
-                            .font(.caption2)
-                            .foregroundStyle(.gray)
-                        // Using timer style for live countdown
-                        Text(context.state.endTime, style: .timer)
-                            .multilineTextAlignment(.center)
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .foregroundStyle(.white)
-                    }
-                    
-                    Spacer()
-                    
-                    // Top Trailing: Next Room
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text("Next Room")
-                            .font(.caption2)
-                            .foregroundStyle(.gray)
-                        Text(context.state.nextRoom)
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .foregroundStyle(.white)
-                    }
+            ClassLiveActivityContentView(context: context)
+                .activityBackgroundTint(.black)
+        } dynamicIsland: { context in
+            DynamicIsland {
+                DynamicIslandExpandedRegion(.bottom) {
+                            ClassLiveActivityContentView(context: context)
                 }
-                
-                Spacer() // Pushes content to edges dynamically
-                
-                // --- MIDDLE ROW (Timing & Subject Name) ---
-                HStack(alignment: .center) {
-                    // Start Time
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Start")
-                            .font(.caption2)
-                            .foregroundStyle(.gray)
-                        Text(context.state.startTime, style: .time)
-                            .font(.caption)
-                            .foregroundStyle(.white)
-                    }
-                    
-                    Spacer()
-                    
-                    // Subject Name (Dynamic)
-                    Text(context.attributes.subjectName)
-                        .font(.headline)
+            } compactLeading: {
+                    Image(systemName: "clock")
                         .fontWeight(.bold)
-                        .foregroundStyle(.white)
-                    
-                    Spacer()
-                    
-                    // End Time
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text("End")
-                            .font(.caption2)
-                            .foregroundStyle(.gray)
-                        Text(context.state.endTime, style: .time)
-                            .font(.caption)
-                            .foregroundStyle(.white)
-                    }
-                }
-                .padding(.vertical, 12)
-                
-                // --- BOTTOM ROW (Buttons) ---
-                HStack(spacing: 10) {
-                    // Button 1: Select
-                    AttendanceButton(
-                        label: "Select",
-                        value: "Select",
-                        currentStatus: context.state.attendanceStatus,
-                        color: Color.gray.gradient
-                    )
-                    
-                    // Button 2: Present
-                    AttendanceButton(
-                        label: "Present",
-                        value: "Present",
-                        currentStatus: context.state.attendanceStatus,
-                        color: Color.green.gradient
-                    )
-                    
-                    // Button 3: Absent
-                    AttendanceButton(
-                        label: "Absent",
-                        value: "Absent",
-                        currentStatus: context.state.attendanceStatus,
-                        color: Color.red.gradient
-                    )
+                        .foregroundStyle(.blue.gradient)
+
+            } compactTrailing: {
+                Text(context.state.endTime, style: .timer)
+                        .foregroundStyle(.blue.gradient)
+                        .frame(maxWidth: 60)
+
+                } minimal: {
+                    Text(context.state.endTime, style: .timer)
+                        .font(.system(size: 9, weight: .bold))
+                        .monospacedDigit()
+                        .foregroundStyle(.blue.gradient)
                 }
             }
-            .padding(16)
-            .activityBackgroundTint(.black)
-            
-        } dynamicIsland: { context in
-                    DynamicIsland {
-                        // EXPANDED STATE
-                        // Top Leading: Current Room
-                        DynamicIslandExpandedRegion(.leading) {
-                            Text(context.state.currentRoom)
-                                .font(.headline)
-                                .padding(.top, 8)
-                        }
-                        
-                        // Top Trailing: Next Room
-                        DynamicIslandExpandedRegion(.trailing) {
-                            Text(context.state.nextRoom)
-                                .font(.headline)
-                                .foregroundStyle(.cyan)
-                                .padding(.top, 8)
-                        }
-                        
-                        // Bottom: "Class time ends:" + Timer
-                        DynamicIslandExpandedRegion(.bottom) {
-                            VStack {
-                                // Show status if selected
-                                if context.state.attendanceStatus != "Select" {
-                                    Text(context.state.attendanceStatus)
-                                        .font(.caption)
-                                        .foregroundStyle(context.state.attendanceStatus == "Present" ? .green : .red)
-                                }
-                                
-                                // Class Time Ends + Timer
-                                HStack {
-                                    Text("Class time ends:")
-                                        .font(.caption)
-                                        .foregroundStyle(.gray)
-                                    Spacer()
-                                    Text(context.state.endTime, style: .timer)
-                                        .font(.headline)
-                                        .foregroundStyle(.cyan)
-                                        .multilineTextAlignment(.trailing)
-                                }
-                            }
-                            .padding(.top, 8)
-                        }
-                        
-                    } compactLeading: {
-                        // COMPACT: Show only Timer (Icon on left)
-                        Image(systemName: "clock").bold()
-                            .foregroundStyle(.blue.gradient)
-                    } compactTrailing: {
-                        // COMPACT: Show only Timer (Countdown on right)
-                        Text(context.state.endTime, style: .timer)
-                            .foregroundStyle(.blue.gradient)
-                            .frame(maxWidth: 60) // Increased slightly to prevent jitter
-                    } minimal: {
-                        // MINIMAL: Scaled Timer to fit the circle
-                        Text(context.state.endTime, style: .timer)
-                            .font(.system(size: 9, weight: .bold)) // Force very small font
-                            .monospacedDigit()
-                            .minimumScaleFactor(0.5) // Allow it to shrink if needed
-                            .multilineTextAlignment(.center)
-                            .foregroundStyle(.blue.gradient)
-                    }
-                }
+
     }
 }
 
@@ -314,4 +166,138 @@ struct AttendanceButton: View {
         endTime: Date().addingTimeInterval(3600),
         attendanceStatus: "Select"
     )
+}
+
+
+extension ClassActivityWidget {
+    struct ClassLiveActivityContentView: View {
+        let context: ActivityViewContext<ClassActivityAttributes>
+
+        var body: some View {
+            VStack(spacing: 0) {
+
+                // Header
+                HStack(spacing: 6) {
+                    Image("CollegeHat")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 20, height: 20)
+                        .background(Color.white.gradient)
+                        .cornerRadius(20)
+
+                    Text("My College Mate")
+                        .font(.caption)
+                        .fontWeight(.heavy)
+                        .foregroundStyle(.white)
+
+                    Spacer()
+                }
+                .padding(.bottom, 8)
+                .padding(.top, 4)
+
+                // Rooms + Countdown (FIXED)
+                HStack {
+                    // Current Room
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Current Room")
+                            .font(.caption2)
+                            .foregroundStyle(.gray)
+                        Text(context.state.currentRoom)
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundStyle(.white)
+                    }
+
+                    Spacer()
+
+                    // ⬇️ CENTERED TIMER (this was the bug)
+                    VStack(spacing: 2) {
+                        Text("Class ends in")
+                            .font(.caption2)
+                            .foregroundStyle(.gray)
+
+                        Text(context.state.endTime, style: .timer)
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .monospacedDigit()   // 🔥 critical
+                            .foregroundStyle(.white)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(minWidth: 80) // stabilizes center column
+
+                    Spacer()
+
+                    // Next Room
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text("Next Room")
+                            .font(.caption2)
+                            .foregroundStyle(.gray)
+                        Text(context.state.nextRoom)
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundStyle(.white)
+                    }
+                }
+
+                // Subject + timing (UNCHANGED – already correct)
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Start")
+                            .font(.caption2)
+                            .foregroundStyle(.gray)
+                        Text(context.state.startTime, style: .time)
+                            .font(.caption)
+                            .foregroundStyle(.white)
+                    }
+
+                    Spacer()
+
+                    Text(context.attributes.subjectName)
+                        .font(.headline)
+                        .fontWeight(.bold)
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+
+                    Spacer()
+
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text("End")
+                            .font(.caption2)
+                            .foregroundStyle(.gray)
+                        Text(context.state.endTime, style: .time)
+                            .font(.caption)
+                            .foregroundStyle(.white)
+                    }
+                }
+                .padding(.vertical, 12)
+
+                // Buttons
+                HStack(spacing: 10) {
+                    AttendanceButton(
+                        label: "Select",
+                        value: "Select",
+                        currentStatus: context.state.attendanceStatus,
+                        color: Color.gray.gradient
+                    )
+
+                    AttendanceButton(
+                        label: "Present",
+                        value: "Present",
+                        currentStatus: context.state.attendanceStatus,
+                        color: Color.green.gradient
+                    )
+
+                    AttendanceButton(
+                        label: "Absent",
+                        value: "Absent",
+                        currentStatus: context.state.attendanceStatus,
+                        color: Color.red.gradient
+                    )
+                }
+            }
+            .padding(16)
+        }
+    }
+
+
 }
