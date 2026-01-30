@@ -76,13 +76,24 @@ struct ClassActivityWidget: Widget {
             } compactLeading: {
                 Image(systemName: "timer").fontWeight(.bold).foregroundStyle(.blue.gradient)
             } compactTrailing: {
-                Text(context.state.endTime, style: .timer)
-                    .foregroundStyle(.blue.gradient)
-                    .frame(maxWidth: 50)
+                // 1. Container controls the width
+                HStack(alignment: .center) {
+                    // 2. Timer: MUST be a solid color to tick smoothly
+                    Text(timerInterval: context.state.startTime...context.state.endTime, countsDown: true)
+                        .monospacedDigit()
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.blue) // <--- FIX: Changed .blue.gradient to .blue
+                        .multilineTextAlignment(.center)
+                }
+                .frame(width: 64)
+                
             } minimal: {
-                Text(context.state.endTime, style: .timer)
-                    .font(.system(size: 9, weight: .bold)).monospacedDigit()
-                    .foregroundStyle(.blue.gradient)
+                // Minimal View
+                Text(timerInterval: context.state.startTime...context.state.endTime, countsDown: true)
+                    .monospacedDigit()
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(.blue) // <--- FIX: Changed .blue.gradient to .blue
+                    .multilineTextAlignment(.center)
             }
         }
     }
