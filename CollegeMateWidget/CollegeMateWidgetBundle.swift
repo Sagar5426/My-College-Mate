@@ -11,9 +11,9 @@ import SwiftUI
 @main
 struct CollegeMateWidgetBundle: WidgetBundle {
     var body: some Widget {
-        CollegeMateWidget()
-        CollegeMateWidgetControl()
-        CollegeMateWidgetLiveActivity()
+//        CollegeMateWidget()
+//        CollegeMateWidgetControl()
+//        CollegeMateWidgetLiveActivity()
         ClassActivityWidget()
     }
 }

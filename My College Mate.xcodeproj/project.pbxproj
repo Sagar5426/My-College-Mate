@@ -54,6 +54,7 @@
 		452725EC2F2B63DB00CDD51F /* CollegeMateWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = CollegeMateWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		452725EE2F2B63DB00CDD51F /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		452725F02F2B63DC00CDD51F /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		452726172F2CCD4900CDD51F /* CollegeMateWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CollegeMateWidgetExtension.entitlements; sourceTree = "<group>"; };
 		452B610A2E76926B00E655B1 /* ShareToCollegeMate.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShareToCollegeMate.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		452D1A5C2D283ED7006E2FAA /* My College Mate.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "My College Mate.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		45C1DADE2EB90B1A00AF1E5C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -71,9 +72,17 @@
 		452726082F2B644600CDD51F /* Exceptions for "CollegeMateWidget" folder in "My College Mate" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				Assets.xcassets,
 				ClassActivityWidget.swift,
 			);
 			target = 452D1A5B2D283ED7006E2FAA /* My College Mate */;
+		};
+		4527260E2F2CC57A00CDD51F /* Exceptions for "CollegeMateWidget" folder in "ShareToCollegeMate" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Assets.xcassets,
+			);
+			target = 452B61092E76926B00E655B1 /* ShareToCollegeMate */;
 		};
 		452B611F2E76993A00E655B1 /* Exceptions for "ShareToCollegeMate" folder in "My College Mate" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
@@ -121,6 +130,7 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				452726082F2B644600CDD51F /* Exceptions for "CollegeMateWidget" folder in "My College Mate" target */,
+				4527260E2F2CC57A00CDD51F /* Exceptions for "CollegeMateWidget" folder in "ShareToCollegeMate" target */,
 				452726042F2B63DE00CDD51F /* Exceptions for "CollegeMateWidget" folder in "CollegeMateWidgetExtension" target */,
 			);
 			path = CollegeMateWidget;
@@ -186,6 +196,7 @@
 		452D1A532D283ED7006E2FAA = {
 			isa = PBXGroup;
 			children = (
+				452726172F2CCD4900CDD51F /* CollegeMateWidgetExtension.entitlements */,
 				45CF87062EB885C60018D3BC /* My-College-Mate-Info.plist */,
 				452D1A5E2D283ED7006E2FAA /* College Mate */,
 				452B610B2E76926B00E655B1 /* ShareToCollegeMate */,
@@ -397,6 +408,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = CollegeMateWidgetExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -405,7 +417,7 @@
 				INFOPLIST_FILE = CollegeMateWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = CollegeMateWidget;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -429,6 +441,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = CollegeMateWidgetExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -437,7 +450,7 @@
 				INFOPLIST_FILE = CollegeMateWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = CollegeMateWidget;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -469,7 +482,7 @@
 				INFOPLIST_FILE = "$(PROJECT_DIR)/ShareToCollegeMate/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = ShareToCollegeMate;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -503,7 +516,7 @@
 				INFOPLIST_FILE = "$(PROJECT_DIR)/ShareToCollegeMate/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = ShareToCollegeMate;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -578,7 +591,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
@@ -639,7 +652,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;

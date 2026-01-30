@@ -74,7 +74,7 @@ struct ClassActivityWidget: Widget {
                 }
                 
             } compactLeading: {
-                Image(systemName: "clock").fontWeight(.bold).foregroundStyle(.blue.gradient)
+                Image(systemName: "timer").fontWeight(.bold).foregroundStyle(.blue.gradient)
             } compactTrailing: {
                 Text(context.state.endTime, style: .timer)
                     .foregroundStyle(.blue.gradient)
