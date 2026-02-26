@@ -265,7 +265,8 @@ struct ControlPanelView: View {
                             .minimumScaleFactor(0.8)
                             .id(viewID)
                             .transition(transition)
-                            .frame(maxWidth: .infinity)                     }
+                            .frame(maxWidth: .infinity)
+                    }
                     .buttonStyle(.plain)
                 }
                 .frame(height: 30)
@@ -298,30 +299,35 @@ struct ControlPanelView: View {
                     withAnimation {
                         viewModel.toggleHoliday()
                     }
+                    
+                    // 👇 NEW: Tell HomeView to update the Live Activity if editing TODAY 👇
+                    if Calendar.current.isDateInToday(viewModel.selectedDate) {
+                        NotificationCenter.default.post(name: .todayHolidayStateChanged, object: nil)
+                    }
                                 
                     // 2. Handle Notifications
                     Task {
                         if viewModel.isHoliday {
                             // If user MARKED as holiday, cancel notifications for this specific date
-                                        await NotificationManager.shared.cancelNotifications(on: viewModel.selectedDate)
-                                    } else {
-                                        let uniqueSubjects = Array(Set(viewModel.dailyClasses.map { $0.subject }))
-                                        await NotificationManager.shared.rescheduleNotifications(for: uniqueSubjects, on: viewModel.selectedDate)
-                                    }
-                                }
-                                
-                            }) {
-                                Text(viewModel.isHoliday ? "Marked as Holiday" : "Mark Today as Holiday")
-                                    .fontWeight(.semibold)
-                                    .frame(maxWidth: .infinity)
-                                    .padding()
-                                    .background(viewModel.isHoliday ? .orange.opacity(0.8) : .gray.opacity(0.2))
-                                    .foregroundStyle(.white)
-                                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                            }
-                            .buttonStyle(.plain)
-                            .transition(.move(edge: .top).combined(with: .opacity))
+                            await NotificationManager.shared.cancelNotifications(on: viewModel.selectedDate)
+                        } else {
+                            let uniqueSubjects = Array(Set(viewModel.dailyClasses.map { $0.subject }))
+                            await NotificationManager.shared.rescheduleNotifications(for: uniqueSubjects, on: viewModel.selectedDate)
                         }
+                    }
+                                
+                }) {
+                    Text(viewModel.isHoliday ? "Marked as Holiday" : "Mark Today as Holiday")
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(viewModel.isHoliday ? .orange.opacity(0.8) : .gray.opacity(0.2))
+                        .foregroundStyle(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .buttonStyle(.plain)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
         }
         .padding()
         .background(.ultraThinMaterial)

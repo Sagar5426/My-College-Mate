@@ -20,6 +20,7 @@ struct ClassActivityAttributes: ActivityAttributes {
         var startTime: Date
         var endTime: Date
         var attendanceStatus: String // "Select", "Present", "Absent"
+        var isLate: Bool = false
     }
     
     var subjectName: String
@@ -220,6 +221,11 @@ struct BreakTimeView: View {
     let context: ActivityViewContext<ClassActivityAttributes>
     var isLockScreen: Bool
     
+    // Helper to check if the timer has crossed 0:00
+    var isLate: Bool {
+        Date() > context.state.endTime
+    }
+    
     var body: some View {
         VStack(spacing: 0) {
             // Header
@@ -227,7 +233,11 @@ struct BreakTimeView: View {
                 Image(systemName: "cup.and.saucer.fill").foregroundStyle(.orange)
                 Text("Break Time").font(.caption).fontWeight(.heavy).foregroundStyle(.orange)
                 Spacer()
-                Text("Next class starts in:").font(.caption2).foregroundStyle(.gray).bold()
+                // CHANGED: Dynamic label based on if the break is over
+                Text(isLate ? "Late by:" : "Next class starts in:")
+                    .font(.caption2)
+                    .foregroundStyle(isLate ? .red : .gray) // Turns red if late
+                    .bold()
             }
             .padding(.bottom, 8)
             
@@ -235,7 +245,7 @@ struct BreakTimeView: View {
                 // Next Subject Info
                 VStack(alignment: .leading, spacing: 2) {
                     Text("UP NEXT").font(.caption2).fontWeight(.bold).foregroundStyle(.gray)
-                    Text(context.attributes.subjectName) // "Data Structures"
+                    Text(context.attributes.subjectName)
                         .font(.headline).fontWeight(.bold).foregroundStyle(.white)
                     HStack {
                         Image(systemName: "location.fill").font(.caption2).foregroundStyle(.gray)
@@ -248,7 +258,7 @@ struct BreakTimeView: View {
                     Text(context.state.endTime, style: .timer)
                         .font(.system(size: 32, weight: .bold, design: .rounded))
                         .monospacedDigit()
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(isLate ? .red : .orange)
                         .multilineTextAlignment(.trailing)
                 }
             }
