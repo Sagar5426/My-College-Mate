@@ -94,6 +94,31 @@
 			);
 			target = 452D1A5B2D283ED7006E2FAA /* My College Mate */;
 		};
+		45493DA02F50BA3500F46D50 /* Exceptions for "ShareToCollegeMate" folder in "CollegeMateWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				SharedModelContainer.swift,
+			);
+			target = 452725EB2F2B63DB00CDD51F /* CollegeMateWidgetExtension */;
+		};
+		45493DA22F50BA5A00F46D50 /* Exceptions for "College Mate" folder in "CollegeMateWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Components/SharedAppGroup.swift,
+				Models/Attendance.swift,
+				Models/AttendanceRecord.swift,
+				Models/AttendenceLogEntry.swift,
+				Models/ClassTime.swift,
+				Models/FileMetaData.swift,
+				Models/Folder.swift,
+				Models/Note.swift,
+				Models/Schedule.swift,
+				Models/Subject.swift,
+				Models/TopicItem.swift,
+				Services/FilesDataService.swift,
+			);
+			target = 452725EB2F2B63DB00CDD51F /* CollegeMateWidgetExtension */;
+		};
 		45B0E72E2EB8E31500196651 /* Exceptions for "ShareToCollegeMate" folder in "ShareToCollegeMate" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -141,6 +166,7 @@
 			exceptions = (
 				452B611F2E76993A00E655B1 /* Exceptions for "ShareToCollegeMate" folder in "My College Mate" target */,
 				45B0E72E2EB8E31500196651 /* Exceptions for "ShareToCollegeMate" folder in "ShareToCollegeMate" target */,
+				45493DA02F50BA3500F46D50 /* Exceptions for "ShareToCollegeMate" folder in "CollegeMateWidgetExtension" target */,
 			);
 			path = ShareToCollegeMate;
 			sourceTree = "<group>";
@@ -149,6 +175,7 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				45BA4A3F2E769BA400743622 /* Exceptions for "College Mate" folder in "ShareToCollegeMate" target */,
+				45493DA22F50BA5A00F46D50 /* Exceptions for "College Mate" folder in "CollegeMateWidgetExtension" target */,
 			);
 			path = "College Mate";
 			sourceTree = "<group>";

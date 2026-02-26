@@ -2,6 +2,7 @@ import ActivityKit
 import WidgetKit
 import SwiftUI
 import AppIntents
+import SwiftData // Required for SharedModelContainer
 
 // MARK: - 1. Data Model & Attributes
 struct ClassActivityAttributes: ActivityAttributes {
@@ -29,16 +30,56 @@ struct ClassActivityAttributes: ActivityAttributes {
 // MARK: - 2. Intent (Button Action)
 struct UpdateAttendanceIntent: LiveActivityIntent {
     static var title: LocalizedStringResource = "Update Attendance"
+    
     @Parameter(title: "Status") var status: String
+    @Parameter(title: "Subject Name") var subjectName: String
     
     init() {}
-    init(status: String) { self.status = status }
+    
+    init(status: String, subjectName: String) {
+        self.status = status
+        self.subjectName = subjectName
+    }
     
     func perform() async throws -> some IntentResult {
+        // 1. Safely update SwiftData
+        do {
+            let container = try SharedModelContainer.make()
+            let context = ModelContext(container)
+            
+            let targetSubjectName = self.subjectName
+            let descriptor = FetchDescriptor<Subject>(predicate: #Predicate { $0.name == targetSubjectName })
+            
+            if let subject = try context.fetch(descriptor).first {
+                // Create an attendance log entry
+                let log = AttendanceLogEntry(timestamp: Date(), subjectName: targetSubjectName, action: status)
+                subject.logs.append(log)
+                
+                // Update overall attendance counts
+                if status == "Present" {
+                    subject.attendance?.attendedClasses += 1
+                    subject.attendance?.totalClasses += 1
+                } else if status == "Absent" {
+                    subject.attendance?.totalClasses += 1
+                }
+                
+                // Save the changes
+                try context.save()
+            }
+        } catch {
+            print("Widget Database Error: \(error.localizedDescription)")
+            // If the database fails, we catch the error so the Intent doesn't crash.
+            // A crash here is what causes the Live Activity UI to revert back.
+        }
+
+        // 2. Update the Live Activity UI
         for activity in Activity<ClassActivityAttributes>.activities {
-            var updatedState = activity.content.state
-            updatedState.attendanceStatus = status
-            await activity.update(ActivityContent(state: updatedState, staleDate: nil))
+            // Ensure we only update the activity for this specific subject
+            if activity.attributes.subjectName == subjectName {
+                var updatedState = activity.content.state
+                updatedState.attendanceStatus = status
+                await activity.update(ActivityContent(state: updatedState, staleDate: nil))
+            }
         }
         return .result()
     }
@@ -49,7 +90,6 @@ struct ClassActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: ClassActivityAttributes.self) { context in
             // MARK: - Lock Screen UI
-            // This view now handles the logic to switch between the 3 states
             ClassLiveActivityContentView(context: context, isLockScreen: true)
                 .activityBackgroundTint(.black)
             
@@ -58,7 +98,7 @@ struct ClassActivityWidget: Widget {
                 // MARK: - Expanded UI
                 DynamicIslandExpandedRegion(.bottom) {
                     VStack(spacing: 0) {
-                        // 1. Header (Icon + Name)
+                        // Header (Icon + Name)
                         HStack(spacing: 6) {
                             Image("CollegeHat")
                                 .resizable().scaledToFit().frame(width: 16, height: 16)
@@ -74,7 +114,7 @@ struct ClassActivityWidget: Widget {
                         }
                         .padding(.bottom, 6)
                         
-                        // 2. Main Content (Reused logic)
+                        // Main Content
                         ClassLiveActivityContentView(context: context, isLockScreen: false)
                     }
                     .padding(.horizontal, 12)
@@ -85,28 +125,24 @@ struct ClassActivityWidget: Widget {
                 // MARK: Compact Leading (Icon)
                 Image(systemName: "timer")
                     .fontWeight(.bold)
-                    // MUST be Solid Blue for performance
                     .foregroundStyle(.blue)
                 
             } compactTrailing: {
                 // MARK: Compact Trailing (Timer)
-                // Wrapped in HStack to prevent layout jitter
                 HStack(alignment: .center) {
                     Text(timerInterval: context.state.startTime...context.state.endTime, countsDown: true)
                         .monospacedDigit()
                         .font(.system(size: 13, weight: .semibold))
-                        // MUST be Solid Blue (No Gradient) to tick smoothly
                         .foregroundStyle(.blue)
                         .multilineTextAlignment(.center)
                 }
-                .frame(width: 64) // Fixed width prevents clipping
+                .frame(width: 64)
                 
             } minimal: {
                 // MARK: Minimal (Tiny Timer)
                 Text(timerInterval: context.state.startTime...context.state.endTime, countsDown: true)
                     .monospacedDigit()
                     .font(.system(size: 8, weight: .bold))
-                    // MUST be Solid Blue
                     .foregroundStyle(.blue)
                     .multilineTextAlignment(.center)
             }
@@ -136,7 +172,7 @@ extension ClassActivityWidget {
 
 // MARK: - 5. Scenario Views
 
-// SCENARIO 1: Ongoing Class (Original Design with Correct Alignment)
+// SCENARIO 1: Ongoing Class
 struct OngoingClassView: View {
     let context: ActivityViewContext<ClassActivityAttributes>
     var isLockScreen: Bool
@@ -166,15 +202,14 @@ struct OngoingClassView: View {
                 Spacer()
                 
                 // Center: Timer
-                // Restored .frame(minWidth: 70) and .multilineTextAlignment(.center)
                 VStack(spacing: 0) {
                     Text("Class ends in").font(isLockScreen ? .caption2 : .system(size: 9)).foregroundStyle(.gray)
                     Text(context.state.endTime, style: .timer)
                         .font(isLockScreen ? .caption : .system(size: 11))
                         .fontWeight(.bold).monospacedDigit().foregroundStyle(.white)
-                        .multilineTextAlignment(.center) // <--- ALIGNMENT RESTORED
+                        .multilineTextAlignment(.center)
                 }
-                .frame(minWidth: 70) // <--- ALIGNMENT FRAME RESTORED
+                .frame(minWidth: 70)
                 
                 Spacer()
                 
@@ -207,21 +242,22 @@ struct OngoingClassView: View {
             
             // Buttons
             HStack(spacing: 8) {
-                AttendanceButton(label: "Select", value: "Select", currentStatus: context.state.attendanceStatus, color: Color.gray.gradient, height: isLockScreen ? 30 : 26)
-                AttendanceButton(label: "Present", value: "Present", currentStatus: context.state.attendanceStatus, color: Color.green.gradient, height: isLockScreen ? 30 : 26)
-                AttendanceButton(label: "Absent", value: "Absent", currentStatus: context.state.attendanceStatus, color: Color.red.gradient, height: isLockScreen ? 30 : 26)
+                AttendanceButton(label: "Select", value: "Select", currentStatus: context.state.attendanceStatus, subjectName: context.attributes.subjectName, color: Color.gray.gradient, height: isLockScreen ? 30 : 26)
+                
+                AttendanceButton(label: "Present", value: "Present", currentStatus: context.state.attendanceStatus, subjectName: context.attributes.subjectName, color: Color.green.gradient, height: isLockScreen ? 30 : 26)
+                
+                AttendanceButton(label: "Absent", value: "Absent", currentStatus: context.state.attendanceStatus, subjectName: context.attributes.subjectName, color: Color.red.gradient, height: isLockScreen ? 30 : 26)
             }
         }
         .padding(isLockScreen ? 14 : 0)
     }
 }
 
-// SCENARIO 2: Break Time (Next Class Countdown)
+// SCENARIO 2: Break Time
 struct BreakTimeView: View {
     let context: ActivityViewContext<ClassActivityAttributes>
     var isLockScreen: Bool
     
-    // Helper to check if the timer has crossed 0:00
     var isLate: Bool {
         Date() > context.state.endTime
     }
@@ -233,10 +269,9 @@ struct BreakTimeView: View {
                 Image(systemName: "cup.and.saucer.fill").foregroundStyle(.orange)
                 Text("Break Time").font(.caption).fontWeight(.heavy).foregroundStyle(.orange)
                 Spacer()
-                // CHANGED: Dynamic label based on if the break is over
                 Text(isLate ? "Late by:" : "Next class starts in:")
                     .font(.caption2)
-                    .foregroundStyle(isLate ? .red : .gray) // Turns red if late
+                    .foregroundStyle(isLate ? .red : .gray)
                     .bold()
             }
             .padding(.bottom, 8)
@@ -293,13 +328,14 @@ struct AttendanceButton: View {
     let label: String
     let value: String
     let currentStatus: String
+    let subjectName: String // Added property
     let color: AnyGradient
     let height: CGFloat
     
     var isSelected: Bool { currentStatus == value }
     
     var body: some View {
-        Button(intent: UpdateAttendanceIntent(status: value)) {
+        Button(intent: UpdateAttendanceIntent(status: value, subjectName: subjectName)) {
             ZStack {
                 if isSelected {
                     Capsule().fill(color == Color.gray.gradient ? Color.white.gradient : color)
@@ -320,7 +356,6 @@ struct AttendanceButton: View {
 
 // MARK: - 6. All Previews
 
-// Preview 1: Lock Screen (Ongoing Class)
 #Preview("Lock Screen - Active", as: .content, using: ClassActivityAttributes(subjectName: "Computer Networks")) {
     ClassActivityWidget()
 } contentStates: {
@@ -332,31 +367,28 @@ struct AttendanceButton: View {
     )
 }
 
-// Preview 2: Lock Screen (Break Time)
 #Preview("Lock Screen - Break", as: .content, using: ClassActivityAttributes(subjectName: "Operating Systems")) {
     ClassActivityWidget()
 } contentStates: {
     ClassActivityAttributes.ContentState(
-        sessionType: .breakTime, // Flag triggers Break UI
+        sessionType: .breakTime,
         currentRoom: "N/A", nextRoom: "D-202",
-        startTime: Date(), endTime: Date().addingTimeInterval(900), // 15 min break
+        startTime: Date(), endTime: Date().addingTimeInterval(900),
         attendanceStatus: "Select"
     )
 }
 
-// Preview 3: Lock Screen (Day Ended)
 #Preview("Lock Screen - End", as: .content, using: ClassActivityAttributes(subjectName: "")) {
     ClassActivityWidget()
 } contentStates: {
     ClassActivityAttributes.ContentState(
-        sessionType: .dayEnded, // Flag triggers End UI
+        sessionType: .dayEnded,
         currentRoom: "", nextRoom: "",
         startTime: Date(), endTime: Date(),
         attendanceStatus: ""
     )
 }
 
-// Preview 4: Dynamic Island (Compact)
 #Preview("Island Compact", as: .dynamicIsland(.compact), using: ClassActivityAttributes(subjectName: "CS")) {
     ClassActivityWidget()
 } contentStates: {
