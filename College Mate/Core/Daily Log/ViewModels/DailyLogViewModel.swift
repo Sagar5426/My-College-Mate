@@ -98,7 +98,15 @@ class DailyLogViewModel: ObservableObject {
                 }
             }
         }
-        
+        Task {
+                if newHolidayState {
+                    await NotificationManager.shared.cancelNotifications(on: selectedDate)
+                } else {
+                    // Re-schedule for today if holiday is removed
+                    let subjectsToReschedule = dailyClasses.map { $0.subject }
+                    await NotificationManager.shared.rescheduleNotifications(for: subjectsToReschedule, on: selectedDate)
+                }
+            }
         // Refresh to check if the day is still a holiday (it will be)
         checkHolidayStatus()
     }

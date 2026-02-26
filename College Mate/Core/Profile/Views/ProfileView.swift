@@ -175,6 +175,18 @@ struct ProfileView: View {
                 .onChange(of: viewModel.notificationsEnabled) {
                     let generator = UIImpactFeedbackGenerator(style: .light)
                     generator.impactOccurred()
+                    
+                    Task {
+                        if !viewModel.notificationsEnabled {
+                            // Wipe all scheduled notifications instantly
+                            UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
+                        } else {
+                            // Reschedule for all subjects
+                            for subject in viewModel.subjects {
+                                await NotificationManager.shared.scheduleNotifications(for: subject)
+                            }
+                        }
+                    }
                 }
                 
                 if viewModel.notificationsEnabled {

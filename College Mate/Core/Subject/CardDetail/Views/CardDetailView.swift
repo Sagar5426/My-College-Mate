@@ -787,6 +787,7 @@ struct CardDetailView: View {
             .scaledToFit()
             .frame(width: 24, height: 24)
             .foregroundStyle(isSelected ? Color.blue : Color.gray)
+            .contentTransition(.symbolEffect(.replace))
             .background(
                 Circle()
                     .fill(Color.white)
