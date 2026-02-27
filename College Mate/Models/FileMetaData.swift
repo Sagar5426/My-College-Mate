@@ -16,7 +16,9 @@ class FileMetadata {
     var folder: Folder?
     var subject: Subject?
     
-    init(fileName: String, fileType: FileType, relativePath: String, fileSize: Int64 = 0, isFavorite: Bool = false, folder: Folder? = nil, subject: Subject? = nil) {
+    var extractedText: String? // NEW: Store extracted content for search
+    
+    init(fileName: String, fileType: FileType, relativePath: String, fileSize: Int64 = 0, isFavorite: Bool = false, folder: Folder? = nil, subject: Subject? = nil, extractedText: String? = nil) {
         self.id = UUID()
         self.fileName = fileName
         self.fileType = fileType
@@ -26,17 +28,18 @@ class FileMetadata {
         self.fileSize = fileSize
         self.folder = folder
         self.subject = subject
+        self.extractedText = extractedText // NEW
     }
     
     init() {}
     
-    // Get the full file URL
     func getFileURL() -> URL? {
         guard let subject = self.subject else { return nil }
         let subjectFolder = FileDataService.subjectFolder(for: subject)
         return subjectFolder.appendingPathComponent(relativePath)
     }
 }
+
 
 enum FileType: String, Codable, CaseIterable {
     case pdf = "pdf"

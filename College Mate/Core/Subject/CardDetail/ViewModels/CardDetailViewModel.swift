@@ -438,67 +438,84 @@ class CardDetailViewModel: ObservableObject {
         }
     }
     
-    func performSearch() {
-        searchTask?.cancel()
-        searchTask = Task {
-            try? await Task.sleep(nanoseconds: 300_000_000)
-            
-            let query = searchText.lowercased()
-            guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                await MainActor.run {
-                    searchResults.removeAll()
-                    searchFolderResults.removeAll()
-                    isSearching = false
-                    filterFileMetadata()
-                }
-                return
-            }
-            
-            let allFiles = self.subject.fileMetadata ?? []
-            let rootFolders = self.subject.rootFolders ?? []
-            
-            struct SearchItem: Sendable {
-                let id: PersistentIdentifier
-                let name: String
-            }
-            
-            let filesData = allFiles.map { SearchItem(id: $0.persistentModelID, name: $0.fileName) }
-            
-            var allFoldersData: [SearchItem] = []
-            func collect(from folders: [Folder]) {
-                for f in folders {
-                    allFoldersData.append(SearchItem(id: f.persistentModelID, name: f.name))
-                    collect(from: f.subfolders ?? [])
-                }
-            }
-            collect(from: rootFolders)
-            
-            let (filteredFileIDs, filteredFolderIDs) = await Task.detached(priority: .userInitiated) {
-                let fIDs = filesData.filter { $0.name.lowercased().contains(query) }.map { $0.id }
-                let fdIDs = allFoldersData.filter { $0.name.lowercased().contains(query) }.map { $0.id }
-                return (fIDs, fdIDs)
-            }.value
-            
-            await MainActor.run {
-                let filteredFiles = allFiles.filter { filteredFileIDs.contains($0.persistentModelID) }
+    // MARK: - Search Methods
+        
+        func performSearch() {
+            searchTask?.cancel()
+            searchTask = Task {
+                try? await Task.sleep(nanoseconds: 300_000_000)
                 
-                var allFoldersObjects: [Folder] = []
-                func collectObjects(from folders: [Folder]) {
+                let query = searchText.lowercased()
+                guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    await MainActor.run {
+                        searchResults.removeAll()
+                        searchFolderResults.removeAll()
+                        isSearching = false
+                        filterFileMetadata()
+                    }
+                    return
+                }
+                
+                let allFiles = self.subject.fileMetadata ?? []
+                let rootFolders = self.subject.rootFolders ?? []
+                
+                // 1. Add extractedText to the thread-safe SearchItem
+                struct SearchItem: Sendable {
+                    let id: PersistentIdentifier
+                    let name: String
+                    let extractedText: String
+                }
+                
+                // 2. Map files and safely provide the extractedText (or empty string if nil)
+                let filesData = allFiles.map {
+                    SearchItem(
+                        id: $0.persistentModelID,
+                        name: $0.fileName,
+                        extractedText: $0.extractedText ?? ""
+                    )
+                }
+                
+                var allFoldersData: [SearchItem] = []
+                func collect(from folders: [Folder]) {
                     for f in folders {
-                        allFoldersObjects.append(f)
-                        collectObjects(from: f.subfolders ?? [])
+                        // Folders don't have extracted text, so we just pass ""
+                        allFoldersData.append(SearchItem(id: f.persistentModelID, name: f.name, extractedText: ""))
+                        collect(from: f.subfolders ?? [])
                     }
                 }
-                collectObjects(from: rootFolders)
-                let filteredFolders = allFoldersObjects.filter { filteredFolderIDs.contains($0.persistentModelID) }
+                collect(from: rootFolders)
                 
-                self.isSearching = true
-                self.searchResults = self.sortFiles(filteredFiles)
-                self.searchFolderResults = self.sortFolders(filteredFolders)
-                self.filterFileMetadata()
+                let (filteredFileIDs, filteredFolderIDs) = await Task.detached(priority: .userInitiated) {
+                    // 3. Filter files by checking both the filename AND the extracted text content
+                    let fIDs = filesData.filter {
+                        $0.name.lowercased().contains(query) ||
+                        $0.extractedText.lowercased().contains(query)
+                    }.map { $0.id }
+                    
+                    let fdIDs = allFoldersData.filter { $0.name.lowercased().contains(query) }.map { $0.id }
+                    return (fIDs, fdIDs)
+                }.value
+                
+                await MainActor.run {
+                    let filteredFiles = allFiles.filter { filteredFileIDs.contains($0.persistentModelID) }
+                    
+                    var allFoldersObjects: [Folder] = []
+                    func collectObjects(from folders: [Folder]) {
+                        for f in folders {
+                            allFoldersObjects.append(f)
+                            collectObjects(from: f.subfolders ?? [])
+                        }
+                    }
+                    collectObjects(from: rootFolders)
+                    let filteredFolders = allFoldersObjects.filter { filteredFolderIDs.contains($0.persistentModelID) }
+                    
+                    self.isSearching = true
+                    self.searchResults = self.sortFiles(filteredFiles)
+                    self.searchFolderResults = self.sortFolders(filteredFolders)
+                    self.filterFileMetadata()
+                }
             }
         }
-    }
     
     func clearSearch() {
         searchText = ""
@@ -589,49 +606,143 @@ class CardDetailViewModel: ObservableObject {
     
     // MARK: - File Import Handlers
 
-    func handleFileImport(result: Result<[URL], Error>) {
-        isImportingFile = true
-        
-        let destinationDir: URL
-        if let currentFolder = currentFolder {
-            destinationDir = FileDataService.getFolderURL(for: currentFolder, in: subject)
-        } else {
-            destinationDir = FileDataService.subjectFolder(for: subject)
-        }
-        
-        Task.detached(priority: .userInitiated) { [weak self] in
-            do {
-                let sourceURLs = try result.get()
-                
-                let importedFiles = await withTaskGroup(of: (String, Int64)?.self) { group in
-                    for sourceURL in sourceURLs {
-                        group.addTask {
-                            guard sourceURL.startAccessingSecurityScopedResource() else { return nil }
-                            defer { sourceURL.stopAccessingSecurityScopedResource() }
-                            
-                            do {
-                                try FileManager.default.createDirectory(at: destinationDir, withIntermediateDirectories: true)
+        func handleFileImport(result: Result<[URL], Error>) {
+            isImportingFile = true
+            
+            let destinationDir: URL
+            if let currentFolder = currentFolder {
+                destinationDir = FileDataService.getFolderURL(for: currentFolder, in: subject)
+            } else {
+                destinationDir = FileDataService.subjectFolder(for: subject)
+            }
+            
+            Task.detached(priority: .userInitiated) { [weak self] in
+                do {
+                    let sourceURLs = try result.get()
+                    
+                    // NEW: Changed TaskGroup return type to include `String?` for extracted text
+                    let importedFiles = await withTaskGroup(of: (String, Int64, String?)?.self) { group in
+                        for sourceURL in sourceURLs {
+                            group.addTask {
+                                guard sourceURL.startAccessingSecurityScopedResource() else { return nil }
+                                defer { sourceURL.stopAccessingSecurityScopedResource() }
                                 
-                                let fileName = sourceURL.lastPathComponent
-                                let destinationURL = destinationDir.appendingPathComponent(fileName)
-                                
-                                if FileManager.default.fileExists(atPath: destinationURL.path) {
-                                    try FileManager.default.removeItem(at: destinationURL)
+                                do {
+                                    try FileManager.default.createDirectory(at: destinationDir, withIntermediateDirectories: true)
+                                    
+                                    let fileName = sourceURL.lastPathComponent
+                                    let destinationURL = destinationDir.appendingPathComponent(fileName)
+                                    
+                                    if FileManager.default.fileExists(atPath: destinationURL.path) {
+                                        try FileManager.default.removeItem(at: destinationURL)
+                                    }
+                                    
+                                    try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
+                                    let size = (try? destinationURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+                                    
+                                    // NEW: Extract text here
+                                    let fileExtension = (fileName as NSString).pathExtension
+                                    let fileType = FileType.from(fileExtension: fileExtension)
+                                    let extractedText = await TextExtractor.extractText(from: destinationURL, type: fileType)
+                                    
+                                    return (fileName, Int64(size), extractedText)
+                                } catch {
+                                    print("Error importing file: \(error)")
+                                    return nil
                                 }
-                                
-                                try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
-                                let size = (try? destinationURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
-                                return (fileName, Int64(size))
-                            } catch {
-                                print("Error importing file: \(error)")
-                                return nil
                             }
+                        }
+                        
+                        var results: [(String, Int64, String?)] = []
+                        for await result in group {
+                            if let res = result { results.append(res) }
+                        }
+                        return results
+                    }
+                    
+                    await MainActor.run { [weak self] in
+                        guard let self = self else { return }
+                        
+                        for (fileName, fileSize, extractedText) in importedFiles {
+                            let fileExtension = (fileName as NSString).pathExtension
+                            let fileType = FileType.from(fileExtension: fileExtension)
+                            
+                            let relativePath: String
+                            if let folder = self.currentFolder {
+                                relativePath = "\(folder.fullPath)/\(fileName)"
+                            } else {
+                                relativePath = fileName
+                            }
+                            
+                            let metadata = FileMetadata(
+                                fileName: fileName,
+                                fileType: fileType,
+                                relativePath: relativePath,
+                                fileSize: fileSize,
+                                folder: self.currentFolder,
+                                subject: self.subject,
+                                extractedText: extractedText // NEW: Store extracted text
+                            )
+                            self.modelContext.insert(metadata)
+                        }
+                        
+                        self.isImportingFile = false
+                        self.loadFolderContent()
+                    }
+                    
+                } catch {
+                    await MainActor.run { [weak self] in
+                        print("Failed to import files: \(error.localizedDescription)")
+                        self?.isImportingFile = false
+                    }
+                }
+            }
+        }
+    
+    private func handlePhotoPickerSelection() {
+            guard !selectedPhotoItems.isEmpty else { return }
+            let items = selectedPhotoItems
+            self.selectedPhotoItems = []
+            self.isImportingFile = true
+            
+            let destinationDir: URL
+            if let currentFolder = currentFolder {
+                destinationDir = FileDataService.getFolderURL(for: currentFolder, in: subject)
+            } else {
+                destinationDir = FileDataService.subjectFolder(for: subject)
+            }
+            
+            Task.detached(priority: .userInitiated) { [weak self] in
+                // NEW: Return tuple now includes String? for the text
+                let readyFiles = await withTaskGroup(of: (String, Int64, String?)?.self) { group in
+                    for item in items {
+                        group.addTask {
+                            if let data = try? await item.loadTransferable(type: Data.self) {
+                                let fileName = "image_\(UUID().uuidString).jpg"
+                                let fileURL = destinationDir.appendingPathComponent(fileName)
+                                
+                                do {
+                                    try FileManager.default.createDirectory(at: destinationDir, withIntermediateDirectories: true)
+                                    try data.write(to: fileURL)
+                                    
+                                    // NEW: Extract text using Vision after saving the image to disk
+                                    let extractedText = await TextExtractor.extractText(from: fileURL, type: .image)
+                                    
+                                    return (fileName, Int64(data.count), extractedText)
+                                } catch {
+                                    print("Error saving picked photo: \(error)")
+                                    return nil
+                                }
+                            }
+                            return nil
                         }
                     }
                     
-                    var results: [(String, Int64)] = []
+                    var results: [(String, Int64, String?)] = []
                     for await result in group {
-                        if let res = result { results.append(res) }
+                        if let validResult = result {
+                            results.append(validResult)
+                        }
                     }
                     return results
                 }
@@ -639,10 +750,7 @@ class CardDetailViewModel: ObservableObject {
                 await MainActor.run { [weak self] in
                     guard let self = self else { return }
                     
-                    for (fileName, fileSize) in importedFiles {
-                        let fileExtension = (fileName as NSString).pathExtension
-                        let fileType = FileType.from(fileExtension: fileExtension)
-                        
+                    for (fileName, fileSize, extractedText) in readyFiles {
                         let relativePath: String
                         if let folder = self.currentFolder {
                             relativePath = "\(folder.fullPath)/\(fileName)"
@@ -652,74 +760,22 @@ class CardDetailViewModel: ObservableObject {
                         
                         let metadata = FileMetadata(
                             fileName: fileName,
-                            fileType: fileType,
+                            fileType: .image,
                             relativePath: relativePath,
                             fileSize: fileSize,
                             folder: self.currentFolder,
-                            subject: self.subject
+                            subject: self.subject,
+                            extractedText: extractedText // NEW: Store extracted text
                         )
                         self.modelContext.insert(metadata)
                     }
                     
                     self.isImportingFile = false
+                    if self.isEditing { self.toggleEditMode() }
                     self.loadFolderContent()
                 }
-                
-            } catch {
-                await MainActor.run { [weak self] in
-                    print("Failed to import files: \(error.localizedDescription)")
-                    self?.isImportingFile = false
-                }
             }
         }
-    }
-    
-    private func handlePhotoPickerSelection() {
-        guard !selectedPhotoItems.isEmpty else { return }
-        let items = selectedPhotoItems
-        self.selectedPhotoItems = []
-        self.isImportingFile = true
-        
-        Task.detached(priority: .userInitiated) { [weak self] in
-            let readyFiles: [(Data, String)] = await withTaskGroup(of: (Data, String)?.self) { group in
-                for item in items {
-                    group.addTask {
-                        if let data = try? await item.loadTransferable(type: Data.self) {
-                            let fileName = "image_\(UUID().uuidString).jpg"
-                            return (data, fileName)
-                        }
-                        return nil
-                    }
-                }
-                
-                var results: [(Data, String)] = []
-                for await result in group {
-                    if let validResult = result {
-                        results.append(validResult)
-                    }
-                }
-                return results
-            }
-            
-            await MainActor.run { [weak self] in
-                guard let self = self else { return }
-                
-                for (data, fileName) in readyFiles {
-                    _ = FileDataService.saveFile(
-                        data: data,
-                        fileName: fileName,
-                        to: self.currentFolder,
-                        in: self.subject,
-                        modelContext: self.modelContext
-                    )
-                }
-                
-                self.isImportingFile = false
-                if self.isEditing { self.toggleEditMode() }
-                self.loadFolderContent()
-            }
-        }
-    }
     
     func handleImageSelected(_ image: UIImage?) {
         guard let image = image else { return }
@@ -728,53 +784,57 @@ class CardDetailViewModel: ObservableObject {
     }
     
     func handleCroppedImage(_ image: UIImage?) {
-        guard let image = image else { return }
-        
-        let destinationDir: URL
-        if let currentFolder = currentFolder {
-            destinationDir = FileDataService.getFolderURL(for: currentFolder, in: subject)
-        } else {
-            destinationDir = FileDataService.subjectFolder(for: subject)
-        }
-        
-        Task.detached(priority: .userInitiated) { [weak self] in
-            guard let imageData = image.jpegData(compressionQuality: 0.8) else { return }
-            let fileName = "image_\(UUID().uuidString).jpg"
-            let fileURL = destinationDir.appendingPathComponent(fileName)
+            guard let image = image else { return }
             
-            do {
-                try FileManager.default.createDirectory(at: destinationDir, withIntermediateDirectories: true)
-                try imageData.write(to: fileURL)
-            } catch {
-                print("Failed to save cropped image: \(error)")
-                return
+            let destinationDir: URL
+            if let currentFolder = currentFolder {
+                destinationDir = FileDataService.getFolderURL(for: currentFolder, in: subject)
+            } else {
+                destinationDir = FileDataService.subjectFolder(for: subject)
             }
             
-            await MainActor.run { [weak self] in
-                guard let self = self else { return }
+            Task.detached(priority: .userInitiated) { [weak self] in
+                guard let imageData = image.jpegData(compressionQuality: 0.8) else { return }
+                let fileName = "image_\(UUID().uuidString).jpg"
+                let fileURL = destinationDir.appendingPathComponent(fileName)
                 
-                let relativePath: String
-                if let folder = self.currentFolder {
-                    relativePath = "\(folder.fullPath)/\(fileName)"
-                } else {
-                    relativePath = fileName
+                do {
+                    try FileManager.default.createDirectory(at: destinationDir, withIntermediateDirectories: true)
+                    try imageData.write(to: fileURL)
+                } catch {
+                    print("Failed to save cropped image: \(error)")
+                    return
                 }
                 
-                let metadata = FileMetadata(
-                    fileName: fileName,
-                    fileType: .image,
-                    relativePath: relativePath,
-                    fileSize: Int64(imageData.count),
-                    folder: self.currentFolder,
-                    subject: self.subject
-                )
-                self.modelContext.insert(metadata)
+                // NEW: Extract text right after saving it
+                let extractedText = await TextExtractor.extractText(from: fileURL, type: .image)
                 
-                if self.isEditing { self.toggleEditMode() }
-                self.loadFolderContent()
+                await MainActor.run { [weak self] in
+                    guard let self = self else { return }
+                    
+                    let relativePath: String
+                    if let folder = self.currentFolder {
+                        relativePath = "\(folder.fullPath)/\(fileName)"
+                    } else {
+                        relativePath = fileName
+                    }
+                    
+                    let metadata = FileMetadata(
+                        fileName: fileName,
+                        fileType: .image,
+                        relativePath: relativePath,
+                        fileSize: Int64(imageData.count),
+                        folder: self.currentFolder,
+                        subject: self.subject,
+                        extractedText: extractedText // NEW: Store extracted text
+                    )
+                    self.modelContext.insert(metadata)
+                    
+                    if self.isEditing { self.toggleEditMode() }
+                    self.loadFolderContent()
+                }
             }
         }
-    }
 
     // MARK: - Thumbnail Generation
     
