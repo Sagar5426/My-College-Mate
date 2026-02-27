@@ -174,6 +174,7 @@ struct ClassActivityWidget: Widget {
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(.blue)
                         .multilineTextAlignment(.center)
+                        .padding(.leading, 2)
                 }
                 .frame(width: 64)
                 
@@ -181,9 +182,11 @@ struct ClassActivityWidget: Widget {
                 // MARK: Minimal (Tiny Timer)
                 Text(timerInterval: context.state.startTime...context.state.endTime, countsDown: true)
                     .monospacedDigit()
-                    .font(.system(size: 8, weight: .bold))
+                    .font(.system(size: 9, weight: .bold, design: .rounded))
                     .foregroundStyle(.blue)
                     .multilineTextAlignment(.center)
+                    .padding(.top, 2)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             }
         }
     }
