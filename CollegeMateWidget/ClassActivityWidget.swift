@@ -42,7 +42,18 @@ struct UpdateAttendanceIntent: LiveActivityIntent {
     }
     
     func perform() async throws -> some IntentResult {
-        // 1. Safely update SwiftData
+        // 1. Find the CURRENT status from the active Live Activity to know what we are changing from
+        var previousStatus = "Select"
+        for activity in Activity<ClassActivityAttributes>.activities {
+            if activity.attributes.subjectName == subjectName {
+                previousStatus = activity.content.state.attendanceStatus
+            }
+        }
+        
+        // If the user tapped the button that is already selected, do nothing
+        guard previousStatus != status else { return .result() }
+        
+        // 2. Safely update SwiftData
         do {
             let container = try SharedModelContainer.make()
             let context = ModelContext(container)
@@ -51,30 +62,58 @@ struct UpdateAttendanceIntent: LiveActivityIntent {
             let descriptor = FetchDescriptor<Subject>(predicate: #Predicate { $0.name == targetSubjectName })
             
             if let subject = try context.fetch(descriptor).first {
-                // Create an attendance log entry
-                let log = AttendanceLogEntry(timestamp: Date(), subjectName: targetSubjectName, action: status)
-                subject.logs.append(log)
                 
-                // Update overall attendance counts
+                // --- A. DETERMINE THE LOG MESSAGE ---
+                var logMessage = ""
                 if status == "Present" {
-                    subject.attendance?.attendedClasses += 1
-                    subject.attendance?.totalClasses += 1
+                    logMessage = "Marked as Present"
                 } else if status == "Absent" {
-                    subject.attendance?.totalClasses += 1
+                    logMessage = "Marked as Absent"
+                } else if status == "Select" {
+                    if previousStatus == "Present" {
+                        logMessage = "Present status reverted"
+                    } else if previousStatus == "Absent" {
+                        logMessage = "Absent status reverted"
+                    }
+                }
+                
+                // Add the log entry
+                if !logMessage.isEmpty {
+                    let log = AttendanceLogEntry(timestamp: Date(), subjectName: targetSubjectName, action: logMessage)
+                    subject.logs.append(log)
+                }
+                
+                // --- B. UPDATE ATTENDANCE COUNTS ---
+                // Step 1: Revert the math from the previous status
+                if previousStatus == "Present" {
+                    subject.attendance?.attendedClasses = max(0, (subject.attendance?.attendedClasses ?? 0) - 1)
+                    subject.attendance?.totalClasses = max(0, (subject.attendance?.totalClasses ?? 0) - 1)
+                } else if previousStatus == "Absent" {
+                    subject.attendance?.totalClasses = max(0, (subject.attendance?.totalClasses ?? 0) - 1)
+                }
+                
+                // Step 2: Apply the math for the new status
+                if status == "Present" {
+                    subject.attendance?.attendedClasses = (subject.attendance?.attendedClasses ?? 0) + 1
+                    subject.attendance?.totalClasses = (subject.attendance?.totalClasses ?? 0) + 1
+                } else if status == "Absent" {
+                    subject.attendance?.totalClasses = (subject.attendance?.totalClasses ?? 0) + 1
                 }
                 
                 // Save the changes
                 try context.save()
+                
+                // Signal the main app that Widget data has changed!
+                if let defaults = UserDefaults(suiteName: "group.com.sagarjangra.College-Mate") {
+                    defaults.set(Date().timeIntervalSince1970, forKey: "widgetAttendanceUpdate")
+                }
             }
         } catch {
             print("Widget Database Error: \(error.localizedDescription)")
-            // If the database fails, we catch the error so the Intent doesn't crash.
-            // A crash here is what causes the Live Activity UI to revert back.
         }
 
-        // 2. Update the Live Activity UI
+        // 3. Update the Live Activity UI
         for activity in Activity<ClassActivityAttributes>.activities {
-            // Ensure we only update the activity for this specific subject
             if activity.attributes.subjectName == subjectName {
                 var updatedState = activity.content.state
                 updatedState.attendanceStatus = status

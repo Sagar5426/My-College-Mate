@@ -13,6 +13,11 @@ struct HomeView: View {
     // Tracks when the app comes to the foreground to update the Live Activity
     @Environment(\.scenePhase) var scenePhase
     
+    // MARK: - Live Activity Sync Properties
+    @State private var refreshID = UUID()
+    @AppStorage("widgetAttendanceUpdate", store: UserDefaults(suiteName: SharedAppGroup.id)) private var widgetAttendanceUpdate: Double = 0
+    @State private var lastSyncTime: Double = 0
+    
     var body: some View {
         TabView(selection: $selectedTab) {
             
@@ -37,16 +42,24 @@ struct HomeView: View {
                 .tag("TimeTable")
             
         }
+        .id(refreshID) // Forces the views to reload SwiftData when this ID changes
         .tint(.cyan)
         .environment(\.colorScheme, .dark)
         .sensoryFeedback(.selection, trigger: selectedTab)
         .onAppear {
             refreshLiveActivity()
+            lastSyncTime = widgetAttendanceUpdate // Initialize the sync tracker
         }
         // 1. Listen for app state changes (coming back from background)
         .onChange(of: scenePhase) { oldPhase, newPhase in
             if newPhase == .active {
                 refreshLiveActivity()
+                
+                // Detect if the Widget updated the database while the app was closed/in background
+                if widgetAttendanceUpdate > lastSyncTime {
+                    refreshID = UUID() // Triggers UI to fetch fresh SwiftData
+                    lastSyncTime = widgetAttendanceUpdate
+                }
             }
         }
         // 2. Listen for the "Mark as Holiday" button press from DailyLogView
@@ -108,6 +121,9 @@ struct HomeView: View {
         let startTime: Date
         let endTime: Date
         
+        // Set default to "Select", but we will overwrite it if the activity is already running
+        var currentAttendanceStatus = "Select"
+        
         if let current = currentClass {
             // SCENARIO 1: Class is happening right now
             sessionType = .ongoingClass
@@ -116,6 +132,14 @@ struct HomeView: View {
             nextRoom = nextClass?.1.roomNumber ?? "None"
             startTime = normalizedTime(for: current.1.startTime)
             endTime = normalizedTime(for: current.1.endTime)
+            
+            // Check if the Live Activity is already running for this exact class
+            // If it is, keep the user's selected status ("Present" / "Absent")
+            if let existingActivity = Activity<ClassActivityAttributes>.activities.first(where: { $0.attributes.subjectName == subjectName }) {
+                if existingActivity.content.state.startTime == startTime {
+                    currentAttendanceStatus = existingActivity.content.state.attendanceStatus
+                }
+            }
             
         } else if let next = nextClass {
             // SCENARIO 2: On break, waiting for the next class
@@ -152,7 +176,7 @@ struct HomeView: View {
             nextRoom: nextRoom,
             startTime: startTime,
             endTime: endTime,
-            attendanceStatus: "Select",
+            attendanceStatus: currentAttendanceStatus, // Uses preserved state!
             isLate: Date() > endTime // Will be true if the break timer has expired!
         )
         let content = ActivityContent(state: state, staleDate: nil)
