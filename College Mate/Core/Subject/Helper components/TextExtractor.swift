@@ -1,15 +1,8 @@
-//
-//  TextExtractor.swift
-//  My College Mate
-//
-//  Created by Sagar Jangra on 27/02/2026.
-//
-
-
 import Foundation
 import Vision
 import PDFKit
 import UIKit
+import ZIPFoundation
 
 struct TextExtractor {
     
@@ -54,11 +47,48 @@ struct TextExtractor {
         }
     }
     
-    /// Uses NSAttributedString to read Word Documents
-    /// iOS does not natively support DOCX text extraction without a 3rd-party unzipping library.
-        /// Returning nil falls back to searching by filename only.
-        private static func extractTextFromDocx(url: URL) -> String? {
-            print("DOCX deep-search is currently unsupported natively on iOS.")
+    /// Unzips the DOCX file, reads the internal document.xml, and strips the XML tags to get raw text
+    private static func extractTextFromDocx(url: URL) -> String? {
+        let fileManager = FileManager.default
+        // Create a unique temporary directory to unzip the contents
+        let tempDirectoryURL = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        
+        do {
+            try fileManager.createDirectory(at: tempDirectoryURL, withIntermediateDirectories: true, attributes: nil)
+            
+            // Unzip the .docx file using ZIPFoundation
+            try fileManager.unzipItem(at: url, to: tempDirectoryURL)
+            
+            // The actual text of a Word Document is always stored in this specific XML file
+            let documentXMLURL = tempDirectoryURL.appendingPathComponent("word/document.xml")
+            
+            guard fileManager.fileExists(atPath: documentXMLURL.path) else {
+                try? fileManager.removeItem(at: tempDirectoryURL) // Cleanup
+                return nil
+            }
+            
+            // Read the raw XML string
+            let xmlString = try String(contentsOf: documentXMLURL, encoding: .utf8)
+            
+            // Use Regular Expressions to strip out all XML tags (e.g., <w:t>, </w:t>, <w:p>)
+            // This replaces anything inside < > with a space
+            let rawText = xmlString.replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression, range: nil)
+            
+            // Clean up extra spaces that the regex might have left behind
+            let cleanedText = rawText
+                .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression, range: nil)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            
+            // Delete the temporary unzipped folder to save space
+            try? fileManager.removeItem(at: tempDirectoryURL)
+            
+            return cleanedText.isEmpty ? nil : cleanedText
+            
+        } catch {
+            print("Failed to extract DOCX text: \(error)")
+            // Ensure cleanup happens even if an error is thrown midway
+            try? fileManager.removeItem(at: tempDirectoryURL)
             return nil
         }
+    }
 }

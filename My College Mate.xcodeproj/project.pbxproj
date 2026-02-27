@@ -13,6 +13,7 @@
 		452726002F2B63DE00CDD51F /* CollegeMateWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 452725EC2F2B63DB00CDD51F /* CollegeMateWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		452726092F2BEA6800CDD51F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 45C1DADE2EB90B1A00AF1E5C /* Assets.xcassets */; };
 		452B61142E76926B00E655B1 /* ShareToCollegeMate.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 452B610A2E76926B00E655B1 /* ShareToCollegeMate.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		4583A6D22F520D1200320DA5 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = 4583A6D12F520D1200320DA5 /* ZIPFoundation */; };
 		45C1DB152EB90B1A00AF1E5C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 45C1DADE2EB90B1A00AF1E5C /* Assets.xcassets */; };
 		45C1DB172EB90B1A00AF1E5C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 45C1DADE2EB90B1A00AF1E5C /* Assets.xcassets */; };
 		45C5A75D2E599E580025FC0B /* Mantis in Frameworks */ = {isa = PBXBuildFile; productRef = 45C5A75C2E599E580025FC0B /* Mantis */; };
@@ -205,6 +206,7 @@
 			files = (
 				45C5A75D2E599E580025FC0B /* Mantis in Frameworks */,
 				4527249E2F27CEB100CDD51F /* Lottie in Frameworks */,
+				4583A6D22F520D1200320DA5 /* ZIPFoundation in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -313,6 +315,7 @@
 			packageProductDependencies = (
 				45C5A75C2E599E580025FC0B /* Mantis */,
 				4527249D2F27CEB100CDD51F /* Lottie */,
+				4583A6D12F520D1200320DA5 /* ZIPFoundation */,
 			);
 			productName = "College Mate";
 			productReference = 452D1A5C2D283ED7006E2FAA /* My College Mate.app */;
@@ -352,6 +355,7 @@
 			packageReferences = (
 				45C5A75B2E599E580025FC0B /* XCRemoteSwiftPackageReference "Mantis" */,
 				4527249C2F27CEB000CDD51F /* XCRemoteSwiftPackageReference "lottie-ios" */,
+				4583A6D02F520D1200320DA5 /* XCRemoteSwiftPackageReference "ZIPFoundation" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 452D1A5D2D283ED7006E2FAA /* Products */;
@@ -836,6 +840,14 @@
 				minimumVersion = 4.6.0;
 			};
 		};
+		4583A6D02F520D1200320DA5 /* XCRemoteSwiftPackageReference "ZIPFoundation" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/weichsel/ZIPFoundation.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.9.20;
+			};
+		};
 		45C5A75B2E599E580025FC0B /* XCRemoteSwiftPackageReference "Mantis" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/guoyingtao/Mantis.git";
@@ -851,6 +863,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 4527249C2F27CEB000CDD51F /* XCRemoteSwiftPackageReference "lottie-ios" */;
 			productName = Lottie;
+		};
+		4583A6D12F520D1200320DA5 /* ZIPFoundation */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4583A6D02F520D1200320DA5 /* XCRemoteSwiftPackageReference "ZIPFoundation" */;
+			productName = ZIPFoundation;
 		};
 		45C5A75C2E599E580025FC0B /* Mantis */ = {
 			isa = XCSwiftPackageProductDependency;
