@@ -240,7 +240,6 @@ struct TopicRowView: View {
                     .focused(focusedItemId, equals: item.id)
                     .strikethrough(item.isCompleted)
                     .foregroundStyle(item.isCompleted ? .secondary : .primary)
-                    .submitLabel(.done)
                     .onSubmit {
                         focusedItemId.wrappedValue = nil
                     }
