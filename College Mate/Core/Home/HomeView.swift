@@ -69,132 +69,174 @@ struct HomeView: View {
     }
     
     // MARK: - Live Activity Logic
-    
-    func refreshLiveActivity() {
-        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
         
-        // 1. Check if TODAY is marked as a holiday natively using SwiftData
-        if isTodayAHoliday() {
-            // If it's a holiday, kill all active Live Activities instantly
-            Task {
-                for activity in Activity<ClassActivityAttributes>.activities {
-                    await activity.end(nil, dismissalPolicy: .immediate)
-                }
-            }
-            return
-        }
-        
-        // 2. Fetch & sort today's classes
-        let todayClasses = getTodaysClasses()
-        
-        // If there are no classes today, end any lingering activities and stop
-        if todayClasses.isEmpty {
-            Task {
-                for activity in Activity<ClassActivityAttributes>.activities {
-                    await activity.end(nil, dismissalPolicy: .immediate)
-                }
-            }
-            return
-        }
-        
-        let now = Date()
-        var currentClass: (Subject, ClassTime)?
-        var nextClass: (Subject, ClassTime)?
-        
-        // 3. Find the ongoing class and the upcoming class
-        for item in todayClasses {
-            let start = normalizedTime(for: item.classTime.startTime)
-            let end = normalizedTime(for: item.classTime.endTime)
+        func refreshLiveActivity() {
+            guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
             
-            if now >= start && now <= end {
-                currentClass = item
-            } else if start > now && nextClass == nil {
-                nextClass = item
+            // 1. Check if TODAY is marked as a holiday natively using SwiftData
+            if isTodayAHoliday() {
+                Task {
+                    for activity in Activity<ClassActivityAttributes>.activities {
+                        await activity.end(nil, dismissalPolicy: .immediate)
+                    }
+                }
+                return
             }
-        }
-        
-        // 4. Build State Variables based on the ActivityWidget UI Scenarios
-        let sessionType: ClassActivityAttributes.ContentState.SessionType
-        let subjectName: String
-        let currentRoom: String
-        let nextRoom: String
-        let startTime: Date
-        let endTime: Date
-        
-        // Set default to "Select", but we will overwrite it if the activity is already running
-        var currentAttendanceStatus = "Select"
-        
-        if let current = currentClass {
-            // SCENARIO 1: Class is happening right now
-            sessionType = .ongoingClass
-            subjectName = current.0.name
-            currentRoom = current.1.roomNumber
-            nextRoom = nextClass?.1.roomNumber ?? "None"
-            startTime = normalizedTime(for: current.1.startTime)
-            endTime = normalizedTime(for: current.1.endTime)
             
-            // Check if the Live Activity is already running for this exact class
-            // If it is, keep the user's selected status ("Present" / "Absent")
-            if let existingActivity = Activity<ClassActivityAttributes>.activities.first(where: { $0.attributes.subjectName == subjectName }) {
-                if existingActivity.content.state.startTime == startTime {
-                    currentAttendanceStatus = existingActivity.content.state.attendanceStatus
+            // 2. Fetch & sort today's classes
+            let todayClasses = getTodaysClasses()
+            
+            if todayClasses.isEmpty {
+                Task {
+                    for activity in Activity<ClassActivityAttributes>.activities {
+                        await activity.end(nil, dismissalPolicy: .immediate)
+                    }
+                }
+                return
+            }
+            
+            let now = Date()
+            var currentClass: (Subject, ClassTime)?
+            var nextClass: (Subject, ClassTime)?
+            
+            // 3. Find the ongoing class and the upcoming class
+            for item in todayClasses {
+                let start = normalizedTime(for: item.classTime.startTime)
+                var end = normalizedTime(for: item.classTime.endTime)
+                
+                // FIX: If the class crosses midnight (PM to AM), move the end time to the next day
+                if end < start {
+                    end = Calendar.current.date(byAdding: .day, value: 1, to: end) ?? end
+                }
+                
+                if now >= start && now <= end {
+                    currentClass = item
+                } else if start > now && nextClass == nil {
+                    nextClass = item
                 }
             }
             
-        } else if let next = nextClass {
-            // SCENARIO 2: On break, waiting for the next class
-            sessionType = .breakTime
-            subjectName = next.0.name
-            currentRoom = "N/A"
-            nextRoom = next.1.roomNumber
-            startTime = Date() // Break started right now
-            endTime = normalizedTime(for: next.1.startTime) // Break ends when next class starts
-            
-            // Schedule an automatic refresh right as the break timer hits 0:00 to show "Late by:"
-            let timeUntilBreakEnds = endTime.timeIntervalSinceNow
-            if timeUntilBreakEnds > 0 {
-                DispatchQueue.main.asyncAfter(deadline: .now() + timeUntilBreakEnds) {
-                    self.refreshLiveActivity()
+            // 4. Check if it's been more than 1 hour since the last class ended
+            if currentClass == nil && nextClass == nil, let lastClass = todayClasses.last {
+                let lastClassStart = normalizedTime(for: lastClass.classTime.startTime)
+                var lastClassEnd = normalizedTime(for: lastClass.classTime.endTime)
+                
+                // Apply the midnight fix here as well
+                if lastClassEnd < lastClassStart {
+                    lastClassEnd = Calendar.current.date(byAdding: .day, value: 1, to: lastClassEnd) ?? lastClassEnd
+                }
+                
+                if now > lastClassEnd.addingTimeInterval(3600) { // 3600 seconds = 1 hour
+                    Task {
+                        for activity in Activity<ClassActivityAttributes>.activities {
+                            await activity.end(nil, dismissalPolicy: .immediate)
+                        }
+                    }
+                    return
                 }
             }
             
-        } else {
-            // SCENARIO 3: All classes for today have ended
-            sessionType = .dayEnded
-            subjectName = "Done"
-            currentRoom = ""
-            nextRoom = ""
-            startTime = Date()
-            endTime = Date()
-        }
-        
-        // 5. Request or Update the Activity
-        let attributes = ClassActivityAttributes(subjectName: subjectName)
-        let state = ClassActivityAttributes.ContentState(
-            sessionType: sessionType,
-            currentRoom: currentRoom,
-            nextRoom: nextRoom,
-            startTime: startTime,
-            endTime: endTime,
-            attendanceStatus: currentAttendanceStatus, // Uses preserved state!
-            isLate: Date() > endTime // Will be true if the break timer has expired!
-        )
-        let content = ActivityContent(state: state, staleDate: nil)
-        
-        Task {
-            if let currentActivity = Activity<ClassActivityAttributes>.activities.first {
-                await currentActivity.update(content)
-                print("Updated Activity: \(currentActivity.id)")
+            // 5. Build State Variables based on the ActivityWidget UI Scenarios
+            let sessionType: ClassActivityAttributes.ContentState.SessionType
+            let subjectName: String
+            let currentRoom: String
+            let nextRoom: String
+            let startTime: Date
+            let endTime: Date
+            
+            var currentAttendanceStatus = "Select"
+            
+            if let current = currentClass {
+                // SCENARIO 1: Class is happening right now
+                sessionType = .ongoingClass
+                subjectName = current.0.name
+                currentRoom = current.1.roomNumber
+                nextRoom = nextClass?.1.roomNumber ?? "None"
+                startTime = normalizedTime(for: current.1.startTime)
+                
+                // Ensure the UI also knows if the end time is tomorrow
+                var end = normalizedTime(for: current.1.endTime)
+                if end < startTime {
+                    end = Calendar.current.date(byAdding: .day, value: 1, to: end) ?? end
+                }
+                endTime = end
+                
+                if let existingActivity = Activity<ClassActivityAttributes>.activities.first(where: { $0.attributes.subjectName == subjectName }) {
+                    if existingActivity.content.state.startTime == startTime {
+                        currentAttendanceStatus = existingActivity.content.state.attendanceStatus
+                    }
+                }
+                
+            } else if let next = nextClass {
+                // SCENARIO 2: On break, waiting for the next class
+                sessionType = .breakTime
+                subjectName = next.0.name
+                currentRoom = "N/A"
+                nextRoom = next.1.roomNumber
+                startTime = Date()
+                endTime = normalizedTime(for: next.1.startTime)
+                
+                let timeUntilBreakEnds = endTime.timeIntervalSinceNow
+                if timeUntilBreakEnds > 0 {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + timeUntilBreakEnds) {
+                        self.refreshLiveActivity()
+                    }
+                }
+                
             } else {
-                do {
-                    let activity = try Activity.request(attributes: attributes, content: content, pushType: nil)
-                    print("Started New Activity: \(activity.id)")
-                } catch {
-                    print("Error: \(error.localizedDescription)")
+                // SCENARIO 3: All classes for today have ended
+                sessionType = .dayEnded
+                subjectName = "Done"
+                currentRoom = ""
+                nextRoom = ""
+                startTime = Date()
+                endTime = Date()
+                
+                // Schedule an automatic refresh to kill the widget 1 hour after the last class
+                if let lastClass = todayClasses.last {
+                    let lastClassStart = normalizedTime(for: lastClass.classTime.startTime)
+                    var lastClassEnd = normalizedTime(for: lastClass.classTime.endTime)
+                    
+                    if lastClassEnd < lastClassStart {
+                        lastClassEnd = Calendar.current.date(byAdding: .day, value: 1, to: lastClassEnd) ?? lastClassEnd
+                    }
+                    
+                    let killTime = lastClassEnd.addingTimeInterval(3600)
+                    let timeUntilKill = killTime.timeIntervalSinceNow
+                    
+                    if timeUntilKill > 0 {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + timeUntilKill) {
+                            self.refreshLiveActivity()
+                        }
+                    }
+                }
+            }
+            
+            // 6. Request or Update the Activity
+            let attributes = ClassActivityAttributes(subjectName: subjectName)
+            let state = ClassActivityAttributes.ContentState(
+                sessionType: sessionType,
+                currentRoom: currentRoom,
+                nextRoom: nextRoom,
+                startTime: startTime,
+                endTime: endTime,
+                attendanceStatus: currentAttendanceStatus,
+                isLate: Date() > endTime
+            )
+            let content = ActivityContent(state: state, staleDate: nil)
+            
+            Task {
+                if let currentActivity = Activity<ClassActivityAttributes>.activities.first {
+                    await currentActivity.update(content)
+                } else {
+                    do {
+                        _ = try Activity.request(attributes: attributes, content: content, pushType: nil)
+                    } catch {
+                        print("Error: \(error.localizedDescription)")
+                    }
                 }
             }
         }
-    }
     
     // MARK: - Helpers
     

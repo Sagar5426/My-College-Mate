@@ -138,20 +138,27 @@ struct ClassActivityWidget: Widget {
                 DynamicIslandExpandedRegion(.bottom) {
                     VStack(spacing: 0) {
                         // Header (Icon + Name)
-                        HStack(spacing: 6) {
-                            Image("CollegeHat")
-                                .resizable().scaledToFit().frame(width: 16, height: 16)
-                                .background(Color.white.gradient)
-                                .clipShape(Circle())
-                            
-                            Text("My College Mate")
-                                .font(.system(size: 11, weight: .heavy))
-                                .foregroundStyle(.white)
-                                .fixedSize()
-                            
-                            Spacer()
+                        if ( context.state.sessionType == .ongoingClass) {
+                            // Header (Icon + Name)
+                            HStack(spacing: 6) {
+                                Image("CollegeHat")
+                                    .resizable().scaledToFit()
+                                    .frame(width: 16, height: 16)
+                                    .background(Color.white.gradient)
+                                    .clipShape(Circle())
+                                
+                                                        
+                                Text("My College Mate")
+                                    .font(.system(size: 11, weight: .heavy))
+                                    .foregroundStyle(.white)
+                                    .fixedSize()
+                                 
+                                
+                                Spacer()
+                                
+                            }
+                            .padding(.bottom, 6)
                         }
-                        .padding(.bottom, 6)
                         
                         // Main Content
                         ClassLiveActivityContentView(context: context, isLockScreen: false)
@@ -161,36 +168,64 @@ struct ClassActivityWidget: Widget {
                 }
                 
             } compactLeading: {
-                // MARK: Compact Leading (Icon)
-                Image(systemName: "timer")
-                    .fontWeight(.bold)
-                    .foregroundStyle(.blue)
-                
-            } compactTrailing: {
-                // MARK: Compact Trailing (Timer)
-                HStack(alignment: .center) {
-                    Text(timerInterval: context.state.startTime...context.state.endTime, countsDown: true)
-                        .monospacedDigit()
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.blue)
-                        .multilineTextAlignment(.center)
-                        .padding(.leading, 2)
+                            // MARK: Compact Leading (Icon)
+                            if context.state.sessionType == .breakTime {
+                                Image(systemName: "cup.and.saucer.fill")
+                                    .fontWeight(.bold)
+                                    .foregroundStyle(.orange) // Matches the expanded break state color
+                            } else if context.state.sessionType == .dayEnded {
+                                Image(systemName: "checkmark.seal.fill")
+                                    .fontWeight(.bold)
+                                    .foregroundStyle(.green)
+                            } else {
+                                Image(systemName: "timer")
+                                    .fontWeight(.bold)
+                                    .foregroundStyle(.blue)
+                            }
+                            
+                        } compactTrailing: {
+                            // MARK: Compact Trailing (Timer)
+                            HStack(alignment: .center) {
+                                if context.state.sessionType == .dayEnded {
+                                    Text("Done")
+                                        .font(.system(size: 13, weight: .bold))
+                                        .foregroundStyle(.green)
+                                } else {
+                                    Text(timerInterval: context.state.startTime...context.state.endTime, countsDown: true)
+                                        .monospacedDigit()
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundStyle(
+                                            context.state.sessionType == .breakTime ?
+                                            (context.state.isLate ? .red : .orange) : .blue
+                                        )
+                                        .multilineTextAlignment(.center)
+                                        .padding(.leading, 2)
+                                }
+                            }
+                            .frame(width: 64)
+                            
+                        } minimal: {
+                            // MARK: Minimal (Tiny Timer)
+                            if context.state.sessionType == .dayEnded {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(.green)
+                            } else {
+                                Text(timerInterval: context.state.startTime...context.state.endTime, countsDown: true)
+                                    .monospacedDigit()
+                                    .font(.system(size: 9, weight: .bold, design: .rounded))
+                                    .foregroundStyle(
+                                        context.state.sessionType == .breakTime ?
+                                        (context.state.isLate ? .red : .orange) : .blue
+                                    )
+                                    .multilineTextAlignment(.center)
+                                    .padding(.top, 2)
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                            }
+                        }
+                    }
                 }
-                .frame(width: 64)
-                
-            } minimal: {
-                // MARK: Minimal (Tiny Timer)
-                Text(timerInterval: context.state.startTime...context.state.endTime, countsDown: true)
-                    .monospacedDigit()
-                    .font(.system(size: 9, weight: .bold, design: .rounded))
-                    .foregroundStyle(.blue)
-                    .multilineTextAlignment(.center)
-                    .padding(.top, 2)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             }
-        }
-    }
-}
 
 // MARK: - 4. Content Logic (The Switcher)
 extension ClassActivityWidget {
