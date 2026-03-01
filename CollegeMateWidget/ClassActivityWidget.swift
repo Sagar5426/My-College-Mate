@@ -281,7 +281,7 @@ struct OngoingClassView: View {
                 // Center: Timer
                 VStack(spacing: 0) {
                     Text("Class ends in").font(isLockScreen ? .caption2 : .system(size: 9)).foregroundStyle(.gray)
-                    Text(context.state.endTime, style: .timer)
+                    Text(timerInterval: context.state.startTime...context.state.endTime, countsDown: true)
                         .font(isLockScreen ? .caption : .system(size: 11))
                         .fontWeight(.bold).monospacedDigit().foregroundStyle(.white)
                         .multilineTextAlignment(.center)
@@ -367,7 +367,7 @@ struct BreakTimeView: View {
                 Spacer()
                 // Big Countdown to Start
                 VStack(alignment: .trailing) {
-                    Text(context.state.endTime, style: .timer)
+                    Text(timerInterval: context.state.startTime...context.state.endTime, countsDown: true)
                         .font(.system(size: 32, weight: .bold, design: .rounded))
                         .monospacedDigit()
                         .foregroundStyle(isLate ? .red : .orange)
