@@ -33,18 +33,17 @@ College Mate solves this by:
 ## 📸 Screenshots
 
 ### 🏠 Home Screen
+<img width="220" alt="Simulator Screenshot - iPhone 17 Pro - 2026-02-28 at 01 26 46" src="https://github.com/user-attachments/assets/410ba175-1ef7-48b1-ba6f-f3651c813d1b" />
+<img width="220" alt="Simulator Screenshot - iPhone 17 Pro - 2026-02-28 at 01 26 55" src="https://github.com/user-attachments/assets/6c763191-4034-448d-b9bf-f08afe0a885a" />
+<img width="220" alt="Simulator Screenshot - iPhone 17 Pro - 2026-02-28 at 01 27 01" src="https://github.com/user-attachments/assets/18f755c6-4c35-4d92-965b-ef1710b93b98" />
 
-<img width="220" alt="Screenshot 2025-10-29 at 11 14 42 PM" src="https://github.com/user-attachments/assets/7c36f8de-b5e1-4324-b40c-1667bfc6a528" />
 <img width="220" alt="Screenshot 2025-10-29 at 11 15 29 PM" src="https://github.com/user-attachments/assets/bedc08ad-2633-44dd-9387-ff1a8786d963" />
 <img width="220" alt="Screenshot 2025-10-29 at 11 17 21 PM" src="https://github.com/user-attachments/assets/8a833850-83ea-4f15-8e80-aec675f55d7a" />
 <img width="220" alt="Screenshot 2025-10-29 at 11 17 28 PM" src="https://github.com/user-attachments/assets/0a18b0e2-67bb-4a62-91f9-8b0c50e493b3" />
 
 ### 📝 Daily Log View
-
-<img width="220" alt="Daily 1" src="https://github.com/user-attachments/assets/2b08ae20-db82-4013-b5fc-cda13bb8e35d" />
-<img width="220" alt="Daily 2" src="https://github.com/user-attachments/assets/0fc049ca-626c-4c72-9b61-9efc13d01f8a" />
-<img width="220" alt="Daily 3" src="https://github.com/user-attachments/assets/6676ecd8-b88c-448e-a8e3-95144bb88d8b" />
-<img width="220" alt="Daily 4" src="https://github.com/user-attachments/assets/8903ce90-3e00-44a6-9880-bcc32c483728" />
+<img width="220" alt="Simulator Screenshot - iPhone 17 Pro - 2026-02-28 at 01 43 03" src="https://github.com/user-attachments/assets/3a8289eb-06dc-46ca-bee3-e6eb3d74f4e2" />
+<img width="220" alt="Simulator Screenshot - iPhone 17 Pro - 2026-02-28 at 01 31 53" src="https://github.com/user-attachments/assets/63b857ba-0f07-4cd9-bfcd-2e4245c4fdbd" />
 
 ### 📅 Timetable View
 
@@ -58,18 +57,15 @@ College Mate solves this by:
 <img width="220" alt="Profile 4" src="https://github.com/user-attachments/assets/815da267-ece6-411b-8f1c-11a922d28ca1" />
 
 ### 📝 Notes View
+<img  width="220" alt="Simulator Screenshot - iPhone 17 Pro - 2026-02-28 at 01 35 26" src="https://github.com/user-attachments/assets/fcf0ffbf-476a-451b-92c0-4dbc67321456" />
 
-<img width="220" alt="Notes 1" src="https://github.com/user-attachments/assets/fec7fe26-7599-4ae3-afe7-9fdf7a112785" />
-<img width="220"  alt="Screenshot 2025-10-29 at 11 18 03 PM" src="https://github.com/user-attachments/assets/9107175f-66f5-4bf7-a83b-d4da5b88048e" />
-<img width="220"  alt="Screenshot 2025-10-29 at 11 18 59 PM" src="https://github.com/user-attachments/assets/a5d55979-fe3f-451d-9a7e-37f713b4e2ea" />
-<img width="220"  alt="Screenshot 2025-10-29 at 11 19 16 PM" src="https://github.com/user-attachments/assets/7b5973f1-2cbd-40e7-acad-aec02302fb0b" />
-<img width="220"  alt="Screenshot 2025-10-29 at 11 19 29 PM" src="https://github.com/user-attachments/assets/e4c32849-71b8-467f-a941-1ce8b9455278" />
-<img width="220"  alt="Screenshot 2025-10-29 at 11 19 37 PM" src="https://github.com/user-attachments/assets/931612d9-665d-4f92-b449-c3ae6a36be25" />
-<img width="220"  alt="Screenshot 2025-10-29 at 11 20 03 PM" src="https://github.com/user-attachments/assets/7fb60502-3000-46c6-8200-8abd83631d91" />
-<img width="220"  alt="Screenshot 2025-10-29 at 11 20 15 PM" src="https://github.com/user-attachments/assets/c1210e49-556c-475a-94e3-9d8a58293a0d" />
-<img width="220"  alt="Screenshot 2025-10-29 at 11 20 59 PM" src="https://github.com/user-attachments/assets/1fbd8cc6-cae5-434e-90b9-43412263901d" />
-<img width="220"  alt="Screenshot 2025-10-29 at 11 21 25 PM" src="https://github.com/user-attachments/assets/1205975e-27c1-4ca0-bbae-78c79764a1de" />
 
+### Dynamic Island: Live Activity
+
+<img width="220" alt="Simulator Screenshot - iPhone 17 Pro - 2026-02-28 at 01 37 24" src="https://github.com/user-attachments/assets/4926ddf7-b5df-48bd-bce4-14a5dc41a6e0" />
+<img width="220" alt="Simulator Screenshot - iPhone 17 Pro - 2026-02-28 at 01 38 43" src="https://github.com/user-attachments/assets/cc455033-d076-40f6-a1c6-151298dbb5b1" />
+<img width="220" alt="Simulator Screenshot - iPhone 17 Pro - 2026-02-28 at 01 39 17" src="https://github.com/user-attachments/assets/0398c929-df29-4363-878f-538f47edf4a6" />
+<img width="220" alt="Simulator Screenshot - iPhone 17 Pro - 2026-02-28 at 01 42 38" src="https://github.com/user-attachments/assets/ebc6d80a-bc66-4405-b8d4-941e50953552" />
 
 ---
 
